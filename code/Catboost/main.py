@@ -6,3 +6,4 @@ if __name__ == "__main__":
     test_path="/Users/giulia/Documents/Università/Magistrale/FDS/Kaggle/scripts/Input/test.jsonl",
     output_csv="/Users/giulia/Documents/Università/Magistrale/FDS/Kaggle/scripts/submission_catboost_top20.csv"
 )
+
