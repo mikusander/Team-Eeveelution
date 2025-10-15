@@ -1,0 +1,8 @@
+{
+    "GradientBoosting": {
+        "learning_rate": 0.05,
+        "max_depth": 3,
+        "n_estimators": 300,
+        "subsample": 0.8
+    }
+}
