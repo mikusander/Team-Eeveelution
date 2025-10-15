@@ -1,0 +1,2 @@
+model,accuracy,confusion_matrix,0_precision,0_recall,0_f1-score,0_support,1_precision,1_recall,1_f1-score,1_support,macro avg_precision,macro avg_recall,macro avg_f1-score,macro avg_support,weighted avg_precision,weighted avg_recall,weighted avg_f1-score,weighted avg_support
+HistGradientBoosting,0.8061,"[[4020, 980], [959, 4041]]",0.8073910423779875,0.804,0.8056919531015132,5000.0,0.8048197570205139,0.8082,0.8065063366929448,5000.0,0.8061053996992507,0.8061,0.806099144897229,10000.0,0.8061053996992507,0.8061,0.806099144897229,10000.0

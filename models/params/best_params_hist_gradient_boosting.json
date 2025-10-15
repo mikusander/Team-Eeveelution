@@ -1,0 +1,8 @@
+{
+    "HistGradientBoosting": {
+        "l2_regularization": 0.1,
+        "learning_rate": 0.05,
+        "max_depth": 3,
+        "max_iter": 500
+    }
+}

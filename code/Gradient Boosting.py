@@ -303,7 +303,7 @@ def train_and_predict(train_path: str, test_path: str, out_path: str, seed: int 
     feature_names = common
 
     # Path for best params file
-    best_params_path = '/Users/lorenzo/Desktop/Università/Sapienza/Computer Science - Magistrale/Foundations of Data Science/Kaggle/Pokemon/models/best_params_gradient_boosting.json'
+    best_params_path = '/Users/lorenzo/Desktop/Università/Sapienza/Computer Science - Magistrale/Foundations of Data Science/Kaggle/Pokemon/Github/Team-Eeveelution/models/params/best_params_gradient_boosting.json'
     # Try to load best params if exists
     if os.path.exists(best_params_path):
         with open(best_params_path, 'r') as f:
@@ -388,7 +388,7 @@ def train_and_predict(train_path: str, test_path: str, out_path: str, seed: int 
     X_train_scaled = scaler_final.fit_transform(X_train)
     clf_final = GradientBoostingClassifier(random_state=seed, **gb_best)
     clf_final.fit(X_train_scaled, y)
-    final_model_path = f"/Users/lorenzo/Desktop/Università/Sapienza/Computer Science - Magistrale/Foundations of Data Science/Kaggle/Pokemon/models/GradientBoosting_final_model.joblib"
+    final_model_path = f"/Users/lorenzo/Desktop/Università/Sapienza/Computer Science - Magistrale/Foundations of Data Science/Kaggle/Pokemon/Github/Team-Eeveelution/models/GradientBoosting_model.joblib"
     joblib.dump(clf_final, final_model_path)
     print(f"Saved final GradientBoosting model to {final_model_path}")
     # Prepare submission for GradientBoosting
@@ -414,7 +414,7 @@ def train_and_predict(train_path: str, test_path: str, out_path: str, seed: int 
                     key = f"{label}_{metric}"
                     row[key] = res['report'][label].get(metric, None)
         output_rows.append(row)
-    comparison_path = '/Users/lorenzo/Desktop/Università/Sapienza/Computer Science - Magistrale/Foundations of Data Science/Kaggle/Pokemon/output/model_gradient_boosting.csv'
+    comparison_path = '/Users/lorenzo/Desktop/Università/Sapienza/Computer Science - Magistrale/Foundations of Data Science/Kaggle/Pokemon/Github/Team-Eeveelution/models/comparisons/model_gradient_boosting.csv'
     pd.DataFrame(output_rows).to_csv(comparison_path, index=False)
     print(f"Saved model metrics to {comparison_path}")
 
