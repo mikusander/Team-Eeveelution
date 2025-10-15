@@ -9,7 +9,7 @@ from preprocessing import build_ml_dataframe
 
 def run_catboost_pipeline(train_path: str, test_path: str, output_csv: str):
     
-    TUNE_HYPERPARAMETERS = False
+    TUNE_HYPERPARAMETERS = True
 
     # 1. Build ML DataFrames
     df_train_full = build_ml_dataframe(train_path, save_path='train_features.csv')

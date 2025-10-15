@@ -2,10 +2,6 @@ import numpy as np
 from typing import Dict, Any, List
 from collections import Counter
 
-import numpy as np
-from typing import Dict, Any, List
-from collections import Counter
-
 TYPE_CHART = {
     'normal': {
         'rock': 0.5, 
@@ -408,6 +404,47 @@ def summary_from_timeline(timeline: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     return out
 
+def ability_features(team: List[Dict[str, Any]], prefix: str) -> Dict[str, Any]:
+    immunity_abilities = {
+        'levitate': 0,      # Immunità a Terra
+        'volt_absorb': 0,   # Immunità a Elettro
+        'water_absorb': 0,  # Immunità a Acqua
+        'flash_fire': 0,    # Immunità a Fuoco
+    }
+    
+    stat_drop_abilities = {
+        'intimidate': 0,    # Abbassa l'Attacco avversario
+    }
+    
+    weather_abilities = {
+        'drought': 0,       # Sole
+        'drizzle': 0,       # Pioggia
+        'sand_stream': 0,   # Terrempesta
+    }
+
+    out = {}
+    
+    for pokemon in team:
+        ability = pokemon.get('ability', '').lower().replace(' ', '_')
+        if ability in immunity_abilities:
+            immunity_abilities[ability] += 1
+        if ability in stat_drop_abilities:
+            stat_drop_abilities[ability] += 1
+        if ability in weather_abilities:
+            weather_abilities[ability] += 1
+            
+    for ability, count in immunity_abilities.items():
+        out[f'{prefix}ability_{ability}_count'] = count
+    for ability, count in stat_drop_abilities.items():
+        out[f'{prefix}ability_{ability}_count'] = count
+    for ability, count in weather_abilities.items():
+        out[f'{prefix}ability_{weather_abilities}_count'] = count
+        
+    out[f'{prefix}total_immunity_abilities'] = sum(immunity_abilities.values())
+    out[f'{prefix}total_stat_drop_abilities'] = sum(stat_drop_abilities.values())
+    
+    return out
+
 def prepare_record_features(record: Dict[str, Any], max_turns: int = 30) -> Dict[str, Any]:
     out = {}
 
@@ -423,9 +460,17 @@ def prepare_record_features(record: Dict[str, Any], max_turns: int = 30) -> Dict
     lead_feats = lead_aggregate_features(p2_lead, prefix='p2_lead_')
     out.update(lead_feats)
 
+    p1_abilities = ability_features(p1_team, prefix='p1_')
+    out.update(p1_abilities)
+
     p1_lead = p1_team[0] if p1_team else {}
     lead_matchup_feats = lead_vs_lead_features(p1_lead, p2_lead)
     out.update(lead_matchup_feats)
+
+    p2_abilities = ability_features([p2_lead], prefix='p2_lead_')
+    out.update(p2_abilities)
+
+    out['p1_intimidate_vs_lead'] = 1 if p1_abilities.get('p1_ability_intimidate_count', 0) > 0 else 0
 
     timeline = record.get('battle_timeline', [])
     tl_feats = summary_from_timeline(timeline[:max_turns])

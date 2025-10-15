@@ -47,14 +47,32 @@ def run_catboost_pipeline(train_path: str, test_path: str, output_csv: str):
     
     cv_cat_features = [f for f in CAT_FEATURES if f in top_features]
 
-    OPTIMAL_PARAMS = {
+    """ OPTIMAL_PARAMS = {
         'iterations': 1924,
         'depth': 5,
         'learning_rate': 0.038756425850563964,
         'l2_leaf_reg': 2.63350046084044,
         'rsm': 0.8600441898727658,
         'bagging_temperature': 0.1916032066181844,
-    }
+    } """ #0.8073
+
+    OPTIMAL_PARAMS = {
+        'iterations': 2848,
+        'depth': 5,
+        'learning_rate': 0.07237695803152867,
+        'l2_leaf_reg': 21.174775148438027,
+        'rsm': 0.8404794027781933,
+        'bagging_temperature': 0.7580211003293981,
+    } #0.8113
+
+    """ OPTIMAL_PARAMS = {
+        'iterations': 2717,
+        'depth': 5,
+        'learning_rate': 0.030143919645181167,
+        'l2_leaf_reg': 2.964573861262902,
+        'rsm': 0.8549333864720773,
+        'bagging_temperature': 0.5328732564135111,
+    } """ # 0.8046
 
     print("\n--- AVVIO CROSS-VALIDATION SUL TRAINING SET ---")
     skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
@@ -81,6 +99,9 @@ def run_catboost_pipeline(train_path: str, test_path: str, output_csv: str):
 
     test_preds_ensemble /= skf.n_splits
     mean_cv_acc = np.mean(cv_accuracies)
+
+    print(f"\n--- RISULTATI FINALE ---")
+    print(f"Mean CV Accuracy: {mean_cv_acc:.4f}")
 
     final_labels = (test_preds_ensemble > 0.5).astype(int)
     submission = pd.DataFrame({"battle_id": df_test[ID_COL], "player_won": final_labels})
