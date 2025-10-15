@@ -1,0 +1,9 @@
+{
+    "XGBoost": {
+        "n_estimators": 400,
+        "learning_rate": 0.034793808124150456,
+        "max_depth": 4,
+        "subsample": 0.9480377815613963,
+        "colsample_bytree": 0.6430222134241663
+    }
+}

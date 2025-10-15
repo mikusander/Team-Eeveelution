@@ -1,0 +1,56 @@
+{
+    "LightGBM": {
+        "learning_rate": 0.03,
+        "max_depth": 7,
+        "num_leaves": 127
+    },
+    "RandomForest": {
+        "max_depth": null,
+        "min_samples_leaf": 2,
+        "min_samples_split": 2,
+        "n_estimators": 500
+    },
+    "LogisticRegression": {
+        "C": 0.01,
+        "solver": "lbfgs"
+    },
+    "SVC": {
+        "C": 0.1,
+        "kernel": "linear"
+    },
+    "KNN": {
+        "n_neighbors": 20
+    },
+    "GradientBoosting": {
+        "learning_rate": 0.05,
+        "max_depth": 3,
+        "n_estimators": 300,
+        "subsample": 0.8
+    },
+    "XGBoost": {
+        "colsample_bytree": 0.6,
+        "learning_rate": 0.05,
+        "max_depth": 4,
+        "n_estimators": 500,
+        "subsample": 1.0
+    },
+    "CatBoost": {
+        "depth": 6,
+        "iterations": 100,
+        "learning_rate": 0.1
+    },
+    "DNN_Keras": {
+        "n_units1": 248,
+        "n_units2": 96,
+        "dropout1": 0.3723166681662924,
+        "dropout2": 0.37808208257852743,
+        "lr": 0.0016084318944980442
+    },
+    "LSTM_Keras": {
+        "lstm_units": 60,
+        "dropout_lstm": 0.12621051592569357,
+        "dense_units": 35,
+        "dropout_dense": 0.44320228892266444,
+        "learning_rate": 0.009534308722041973
+    }
+}
