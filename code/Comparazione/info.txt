@@ -1,0 +1,1 @@
+Mettere qui i file submission.csv da comparare e cambiare i percorsi all'interno per fare confronto

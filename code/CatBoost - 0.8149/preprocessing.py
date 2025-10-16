@@ -12,8 +12,12 @@ def build_ml_dataframe(jsonl_path: str, is_train: bool = True, save_path: str = 
         cols = ['battle_id'] + [c for c in df.columns if c != 'battle_id']
         df = df[cols]
 
-    df.fillna(-999, inplace=True)
-
+    for col in df.columns:
+        if df[col].dtype == 'object':
+            df[col].fillna('missing', inplace=True)
+        else:
+            df[col].fillna(-999, inplace=True)
+    
     if save_path is not None:
         df.to_csv(save_path, index=False)
         print(f"DataFrame salvato in {save_path}")

@@ -65,7 +65,7 @@ TYPE_CHART = {
         'grass': 2, 
         'poison': 0.5, 
         'ground': 0.5, 
-        'bug': 2, # Particolarità della Gen 1
+        'bug': 2, 
         'rock': 0.5, 
         'ghost': 0.5
     },
@@ -89,7 +89,7 @@ TYPE_CHART = {
         'fighting': 2, 
         'poison': 2, 
         'psychic': 0.5,
-        'ghost': 0 # Famoso bug della Gen 1
+        'ghost': 0 
     },
     'bug': {
         'fire': 0.5, 
@@ -97,7 +97,7 @@ TYPE_CHART = {
         'fighting': 0.5, 
         'poison': 2, 
         'flying': 0.5, 
-        'psychic': 2, # Particolarità della Gen 1
+        'psychic': 2, 
         'ghost': 0.5
     },
     'rock': {
@@ -110,7 +110,7 @@ TYPE_CHART = {
     },
     'ghost': {
         'normal': 0, 
-        'psychic': 0, # Famoso bug della Gen 1
+        'psychic': 0, 
         'ghost': 2
     },
     'dragon': {
@@ -406,20 +406,20 @@ def summary_from_timeline(timeline: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 def ability_features(team: List[Dict[str, Any]], prefix: str) -> Dict[str, Any]:
     immunity_abilities = {
-        'levitate': 0,      # Immunità a Terra
-        'volt_absorb': 0,   # Immunità a Elettro
-        'water_absorb': 0,  # Immunità a Acqua
-        'flash_fire': 0,    # Immunità a Fuoco
+        'levitate': 0,      
+        'volt_absorb': 0,   
+        'water_absorb': 0,  
+        'flash_fire': 0,    
     }
     
     stat_drop_abilities = {
-        'intimidate': 0,    # Abbassa l'Attacco avversario
+        'intimidate': 0,    
     }
     
     weather_abilities = {
-        'drought': 0,       # Sole
-        'drizzle': 0,       # Pioggia
-        'sand_stream': 0,   # Terrempesta
+        'drought': 0,       
+        'drizzle': 0,       
+        'sand_stream': 0,   
     }
 
     out = {}
@@ -438,7 +438,7 @@ def ability_features(team: List[Dict[str, Any]], prefix: str) -> Dict[str, Any]:
     for ability, count in stat_drop_abilities.items():
         out[f'{prefix}ability_{ability}_count'] = count
     for ability, count in weather_abilities.items():
-        out[f'{prefix}ability_{weather_abilities}_count'] = count
+        out[f'{prefix}ability_{ability}_count'] = count
         
     out[f'{prefix}total_immunity_abilities'] = sum(immunity_abilities.values())
     out[f'{prefix}total_stat_drop_abilities'] = sum(stat_drop_abilities.values())

@@ -5,8 +5,10 @@ from sklearn.metrics import accuracy_score
 from catboost import CatBoostClassifier
 import shap
 from preprocessing import build_ml_dataframe 
+import joblib
+import os
 
-def run_catboost_pipeline(train_path: str, test_path: str, output_csv: str):
+def run_catboost_pipeline_final(train_path: str, test_path: str, output_csv: str):
     
     df_train_full = build_ml_dataframe(train_path, save_path='train_features.csv')
     df_test = build_ml_dataframe(test_path, is_train=False, save_path='test_features.csv')
@@ -90,6 +92,10 @@ def run_catboost_pipeline(train_path: str, test_path: str, output_csv: str):
         model_cb = CatBoostClassifier(**final_params)
         model_cb.fit(X_tr, y_tr, eval_set=(X_val, y_val)) 
         
+        model_filename = os.path.join('/Users/giulia/Documents/Università/Magistrale/FDS/Kaggle/CatBoost - 0.8149/Models', f"catboost_fold_{fold+1}.joblib")
+        joblib.dump(model_cb, model_filename)
+        print(f"Modello salvato: {model_filename}")
+
         y_val_pred = model_cb.predict(X_val)
         val_acc = accuracy_score(y_val, y_val_pred)
         cv_accuracies.append(val_acc)
