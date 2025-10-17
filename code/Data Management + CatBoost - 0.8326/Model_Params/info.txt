@@ -1,0 +1,1 @@
+Parametri che ho usato nelle submission, trovati con Optuna - Manca la funzione di Optuna per i parametri sulla 80%, riadattare quella sul 100%

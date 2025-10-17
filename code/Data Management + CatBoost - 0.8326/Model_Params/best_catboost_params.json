@@ -1,0 +1,12 @@
+{
+  "learning_rate": 0.012563336722233025,
+  "depth": 8,
+  "l2_leaf_reg": 8.650439246475187,
+  "random_strength": 0.323253749970177,
+  "bagging_temperature": 0.2150468549778919,
+  "border_count": 97,
+  "objective": "Logloss",
+  "eval_metric": "AUC",
+  "verbose": 0,
+  "random_seed": 42
+}
