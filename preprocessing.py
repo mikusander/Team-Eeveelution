@@ -23,6 +23,8 @@ def build_ml_dataframe(jsonl_path: str, is_train: bool = True, save_path: str = 
     for col in df.select_dtypes(['category']).columns:
         df[col] = df[col].cat.codes
 
+    df = df.fillna(0)  # Fill missing values
+
     if save_path is not None:
         df.to_csv(save_path, index=False)
         print(f"DataFrame salvato in {save_path}")

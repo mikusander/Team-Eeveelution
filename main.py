@@ -1,8 +1,12 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from model_XGBoost import run_xgboost_pipeline_final
 from model_XGBoost_test import run_xgboost_pipeline_test
 
 if __name__ == "__main__":
-    TESTING = False  
+    TESTING = True
     if TESTING:
         run_xgboost_pipeline_test(
         train_path="train.jsonl",
