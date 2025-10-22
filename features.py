@@ -181,6 +181,7 @@ def team_aggregate_features(team: List[Dict[str, Any]], prefix: str = 'p1_') -> 
         for t in p.get('types', []):
             types_counter[t.lower()] += 1
 
+    # Calcola somma, media, max, min, std per ogni statistica base
     for s in stats:
         arr = np.array(vals[s], dtype=float)
         out[f'{prefix}{s}_sum'] = arr.sum()
@@ -189,18 +190,23 @@ def team_aggregate_features(team: List[Dict[str, Any]], prefix: str = 'p1_') -> 
         out[f'{prefix}{s}_min'] = arr.min()
         out[f'{prefix}{s}_std'] = arr.std()
 
+    # Statistiche sui livelli
     level_arr = np.array(levels, dtype=float)
     out[f'{prefix}level_mean'] = level_arr.mean()
     out[f'{prefix}level_sum'] = level_arr.sum()
 
+    # Numero di tipi unici nel team
     out[f'{prefix}n_unique_types'] = len(types_counter)
 
+    # Conta quanti Pokémon hanno ciascun tipo tra quelli più comuni
     common_types = ['normal','fire','water','electric','grass','psychic','ice','dragon','rock','ground','flying']
     for t in common_types:
         out[f'{prefix}type_{t}_count'] = types_counter.get(t, 0)
 
+    # Nome del lead (primo Pokémon)
     out[f'{prefix}lead_name'] = names[0] if names else ''
 
+    # Numero di nomi unici nel team
     out[f'{prefix}n_unique_names'] = len(set(names))
 
     return out
@@ -451,5 +457,16 @@ def prepare_record_features(record: Dict[str, Any], max_turns: int = 30) -> Dict
     
     p2_lead_bulk = out.get('p2_lead_base_def', 1) + out.get('p2_lead_base_spd', 1)
     out['p1_se_options_vs_lead_bulk'] = out.get('p1_super_effective_options', 0) / (p2_lead_bulk + 1e-6)
+
+    # --- NUOVA FEATURE: AGGREGATE DEL TEAM AVVERSARIO ---
+    p2_team = record.get('p2_team_details', [])
+    if p2_team:
+        p2_team_feats = team_aggregate_features(p2_team, prefix='p2_')
+        out.update(p2_team_feats)
+        # Differenze tra team
+        out['team_hp_sum_diff'] = out.get('p1_base_hp_sum', 0) - out.get('p2_base_hp_sum', 0)
+        out['team_spa_mean_diff'] = out.get('p1_base_spa_mean', 0) - out.get('p2_base_spa_mean', 0)
+        out['team_spe_mean_diff'] = out.get('p1_base_spe_mean', 0) - out.get('p2_base_spe_mean', 0)
+        out['n_unique_types_team_diff'] = out.get('p1_n_unique_types', 0) - out.get('p2_n_unique_types', 0)
 
     return out

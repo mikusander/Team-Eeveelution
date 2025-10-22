@@ -14,10 +14,10 @@ def build_ml_dataframe(jsonl_path: str, is_train: bool = True, save_path: str = 
 
     for col in df.columns:
         if df[col].dtype == 'object':
-            df[col].fillna('missing', inplace=True)
+            df[col] = df[col].fillna('missing')  # per colonne categoriche
             df[col] = df[col].astype('category')  # Convert object columns to category
         else:
-            df[col].fillna(-999, inplace=True)
+            df[col] = df[col].fillna(-999)       # per colonne numeriche
     
     # Convert all category columns to numeric codes for XGBoost compatibility
     for col in df.select_dtypes(['category']).columns:
