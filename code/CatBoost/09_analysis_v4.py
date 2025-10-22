@@ -1,7 +1,7 @@
 """
-This script performs exploratory data analysis on the Pokémon battle dataset with static 
-and dynamic features (v2). It analyzes the target distribution, computes mean feature values 
-by battle outcome, calculates feature correlations with the target, and saves a correlation heatmap.
+This script performs exploratory data analysis on the final Pokémon battle dataset (v4 features),
+analyzing the target distribution, computing mean feature values by battle outcome, calculating
+feature correlations with the target, and saving a correlation heatmap.
 """
 
 import pandas as pd
@@ -9,12 +9,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 
-FEATURES_DIR = 'Features_v2'  
+FEATURES_DIR = 'Features_v4'  
 ANALYSIS_DIR = 'Analysis_Output'
 os.makedirs(ANALYSIS_DIR, exist_ok=True)
 
-FEATURES_TRAIN_FILE = os.path.join(FEATURES_DIR, 'features_train_v2.csv') 
-HEATMAP_OUTPUT_FILE = os.path.join(ANALYSIS_DIR, 'correlation_heatmap_v2.png') 
+FEATURES_TRAIN_FILE = os.path.join(FEATURES_DIR, 'features_final_train.csv') 
+HEATMAP_OUTPUT_FILE = os.path.join(ANALYSIS_DIR, 'correlation_heatmap_final.png') 
 
 sns.set(style="whitegrid")
 
@@ -23,7 +23,7 @@ print(f"Loading training data from {FEATURES_TRAIN_FILE}...")
 try:
     df = pd.read_csv(FEATURES_TRAIN_FILE)
 except FileNotFoundError:
-    print(f"Error: File not found. Ensure '04_feature_engineering_02.py' has been run first.")
+    print(f"Error: File not found. Ensure '08_feature_engineering_04.py' has been run first.")
     exit()
 
 print(f"Loaded {len(df)} rows.")
@@ -41,15 +41,16 @@ df['player_won_int'] = df['player_won'].astype(int)
 
 features_to_analyze = [
     'faint_delta',
-    'p1_fainted_count',
-    'p2_fainted_count',
-    'final_hp_delta',
     'hp_avg_delta',
-    'total_boosts_delta',
     'p1_pokemon_used_count',
     'p2_pokemon_revealed_count',
-    'lead_offense_delta',
-    'team_counters_vs_lead'
+    'p1_avg_effectiveness',
+    'p1_super_effective_hits',
+    'p2_avg_effectiveness',
+    'p2_super_effective_hits',
+    'p1_total_status_turns',
+    'p2_total_status_turns',
+    'status_turns_delta'
 ]
 
 grouped_analysis = df.groupby('player_won')[features_to_analyze].mean().T
@@ -69,17 +70,17 @@ print("Feature correlations with 'player_won_int':")
 print(corr_with_target)
 
 print("Saving correlation heatmap...")
-plt.figure(figsize=(12, 10)) 
+plt.figure(figsize=(16, 14)) 
 sns.heatmap(
     corr_matrix, 
     annot=True,     
     cmap='coolwarm',
     fmt=".2f"       
 )
-plt.title("Correlation Matrix")
+plt.title("Correlation Matrix: Final Features")
 plt.tight_layout()
 plt.savefig(HEATMAP_OUTPUT_FILE)
 
 print(f"Heatmap saved to: {HEATMAP_OUTPUT_FILE}")
-print("\nAnalysis v2 completed. Check console output and saved PNG.")
-print("\n05_analysis_v2.py executed successfully.")
+print("\nFinal analysis completed. Check console output and saved PNG.")
+print("\n09_analysis_v4.py executed successfully.")

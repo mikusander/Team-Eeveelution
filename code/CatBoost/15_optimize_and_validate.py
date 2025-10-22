@@ -1,3 +1,10 @@
+"""
+This script optimizes and validates a CatBoostClassifier on preprocessed Pokémon battle data.
+It optionally performs hyperparameter optimization using Optuna on the training set, trains
+the model on the training set, evaluates on the validation set, and saves metrics, plots,
+feature importances, and best parameters.
+"""
+
 import pandas as pd
 import numpy as np
 import os
@@ -10,39 +17,36 @@ from sklearn.model_selection import cross_val_score, KFold
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, roc_auc_score, roc_curve
 import seaborn as sns
 import matplotlib.pyplot as plt
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
 
-# --- 1. Configurazione ---
-SPLIT_DIR = 'preprocessed_splits' # Cartella con i dati divisi
-MODEL_PARAMS_DIR = 'model_params'
-ANALYSIS_DIR = 'Model_Analysis_Validation' # Output di QUESTA fase
+SPLIT_DIR = 'Preprocessed_Splits' 
+MODEL_PARAMS_DIR = 'Model_Params'
+ANALYSIS_DIR = 'Model_Analysis_Validation' 
 os.makedirs(MODEL_PARAMS_DIR, exist_ok=True)
 os.makedirs(ANALYSIS_DIR, exist_ok=True)
 
-# Input (Train e Validation)
 X_TRAIN_FILE = os.path.join(SPLIT_DIR, 'train_split_60_X.csv')
 Y_TRAIN_FILE = os.path.join(SPLIT_DIR, 'train_split_60_y.csv')
 X_VAL_FILE = os.path.join(SPLIT_DIR, 'validation_split_20_X.csv')
 Y_VAL_FILE = os.path.join(SPLIT_DIR, 'validation_split_20_y.csv')
-PARAMS_FILE = os.path.join(MODEL_PARAMS_DIR, 'best_catboost_params.json') # File dei parametri
+PARAMS_FILE = os.path.join(MODEL_PARAMS_DIR, 'best_catboost_params.json') 
 
-# Output (Parametri e Grafici di VALIDAZIONE)
 PARAMS_OUTPUT_FILE = os.path.join(MODEL_PARAMS_DIR, 'best_catboost_params.json')
 ITERATION_OUTPUT_FILE = os.path.join(MODEL_PARAMS_DIR, 'best_iteration.json')
-METRICS_OUTPUT_FILE = os.path.join(ANALYSIS_DIR, 'validation_metrics_report.csv')
+REPORT_TXT_FILE = os.path.join(ANALYSIS_DIR, 'validation_classification_report.txt')
 CM_OUTPUT_FILE = os.path.join(ANALYSIS_DIR, 'validation_confusion_matrix.png')
 IMPORTANCE_OUTPUT_FILE = os.path.join(ANALYSIS_DIR, 'validation_feature_importance.png')
 LOSS_CURVE_FILE = os.path.join(ANALYSIS_DIR, 'validation_loss_curve.png')
 AUC_CURVE_FILE = os.path.join(ANALYSIS_DIR, 'validation_auc_learning_curve.png')
 ROC_CURVE_FILE = os.path.join(ANALYSIS_DIR, 'validation_roc_auc_curve.png')
 
-# --- Impostazioni Esecuzione ---
-OPTUNA = True # Imposta a True per rieseguire l'ottimizzazione
+OPTUNA = False 
 N_TRIALS_OPTIMIZATION = 100 
 
-print("Avvio Script di Ottimizzazione e VALIDAZIONE (Fase 2)...")
+print("Starting Optimization and Validation Script...")
 
-# --- 2. Caricamento Dati (Train 60% e Validation 20%) ---
-print("Caricamento dati 60% (Train) e 20% (Validation)...")
+print("Loading 60% Train and 20% Validation data...")
 try:
     X_train = pd.read_csv(X_TRAIN_FILE)
     y_train = pd.read_csv(Y_TRAIN_FILE).values.ravel()
@@ -50,23 +54,21 @@ try:
     y_val = pd.read_csv(Y_VAL_FILE).values.ravel()
     
     if(OPTUNA == False and os.path.exists(PARAMS_FILE)):
-        print(f"Caricamento parametri esistenti da {PARAMS_FILE}...")
+        print(f"Loading existing parameters from {PARAMS_FILE}...")
         with open(PARAMS_FILE, 'r') as f:
             best_params_clean = json.load(f)
     elif(OPTUNA == False):
-        print("ATTENZIONE: OPTUNA=False ma nessun file parametri trovato. Verranno usati i parametri di default.")
-        best_params_clean = {} # Usa default
+        print("WARNING: OPTUNA=False but no parameter file found. Default parameters will be used.")
+        best_params_clean = {} 
     else:
-        print("OPTUNA=True. I parametri esistenti verranno sovrascritti.")
+        print("OPTUNA=True. Existing parameters will be overwritten.")
 
 except FileNotFoundError:
-    print(f"ERRORE: File non trovati in {SPLIT_DIR}. Esegui prima '16_data_splitter.py'.")
+    print(f"ERROR: Files not found in {SPLIT_DIR}. Run '16_data_splitter.py' first.")
     exit()
 
-
-# --- 3. Fase 1: Ottimizzazione (Eseguita solo su 60% Train) ---
 if(OPTUNA == True):
-    print(f"\n--- Fase 1: Avvio studio Optuna per {N_TRIALS_OPTIMIZATION} tentativi (sul 60% Train) ---")
+    print(f"\nPhase 1: Starting Optuna study for {N_TRIALS_OPTIMIZATION} trials (on 60% Train):\n")
     start_time = time.time()
 
     def objective(trial, X_data, y_data):
@@ -86,13 +88,12 @@ if(OPTUNA == True):
     study.optimize(lambda trial: objective(trial, X_train, y_train), 
                    n_trials=N_TRIALS_OPTIMIZATION)
     end_time = time.time()
-    print(f"Ottimizzazione completata in {end_time - start_time:.2f} secondi.")
+    print(f"Optimization completed in {end_time - start_time:.2f} seconds.")
     
     best_params_clean = study.best_params
     best_score_clean = study.best_value
-    print(f"\nMiglior Punteggio AUC (CV su 60%): {best_score_clean:.6f}")
+    print(f"\nBest AUC Score (CV on 60%): {best_score_clean:.6f}")
     
-    # Prepariamo i parametri completi per il salvataggio
     final_params_to_save = {
         **best_params_clean, 
         'objective': 'Logloss', 'eval_metric': 'AUC',
@@ -100,15 +101,13 @@ if(OPTUNA == True):
     }
     with open(PARAMS_OUTPUT_FILE, 'w') as f:
         json.dump(final_params_to_save, f, indent=2)
-    print(f"Parametri 'puliti' salvati in: {PARAMS_OUTPUT_FILE}")
+    print(f"Cleaned parameters saved to: {PARAMS_OUTPUT_FILE}")
     best_params_clean = final_params_to_save
 
 else:
-    print(f"\n--- Fase 1: Ottimizzazione Optuna saltata (OPTUNA=False) ---")
+    print(f"\nPhase 1: Optuna optimization skipped (OPTUNA=False):\n")
 
-
-# --- 4. Fase 2: Diagnostica su Validation Set (20%) ---
-print("\n--- Fase 2: Addestramento su 60% e Diagnostica su 20% (Validation) ---")
+print("\nPhase 2: Training on 60% and Diagnostics on 20% (Validation):\n")
 
 final_params_fit = best_params_clean.copy() 
 final_params_fit.update({
@@ -117,78 +116,69 @@ final_params_fit.update({
     'verbose': 1000, 'random_seed': 42
 })
 
-print("Addestramento modello: Train (60%), Eval (20%)...")
+print("Training model: Train (60%), Eval (20%)...")
 model = CatBoostClassifier(**final_params_fit)
 
-# Addestriamo sul 60% e usiamo il 20% (Validation) come eval_set
 model.fit(
     X_train, y_train,
-    eval_set=[(X_train, y_train), (X_val, y_val)], # [0] è train, [1] è validation
+    eval_set=[(X_train, y_train), (X_val, y_val)], 
     plot=False,
     use_best_model=True, 
     verbose=1000
 )
 
 best_iteration = model.get_best_iteration()
-print(f"\nNumero ottimale di iterazioni (alberi) trovate: {best_iteration}")
+print(f"\nOptimal number of iterations (trees) found: {best_iteration}")
 with open(ITERATION_OUTPUT_FILE, 'w') as f:
     json.dump({'best_iteration': best_iteration}, f, indent=2)
-print(f"Numero iterazioni salvato in: {ITERATION_OUTPUT_FILE}")
+print(f"Best iteration saved in: {ITERATION_OUTPUT_FILE}")
 
-print("\n--- 4.1 Metriche di Performance (su 20% Validation) ---")
+print("\nPhase 3: Performance Metrics (on 20% Validation):\n")
 y_pred_val = model.predict(X_val)
 y_pred_proba_val = model.predict_proba(X_val)[:, 1]
 
-# Calcoliamo le metriche
 train_accuracy = accuracy_score(y_train, model.predict(X_train))
 val_accuracy = accuracy_score(y_val, y_pred_val)
 val_auc = roc_auc_score(y_val, y_pred_proba_val)
 
-print(f"  Accuracy (sul Training 60%): {train_accuracy:.4f}")
-print(f"  Accuracy (sul Validation 20%): {val_accuracy:.4f}  <-- Punteggio di tuning")
-print(f"  AUC (sul Validation 20%): {val_auc:.4f}      <-- Punteggio di tuning")
+print(f"  Accuracy (Training 60%): {train_accuracy:.4f}")
+print(f"  Accuracy (Validation 20%): {val_accuracy:.4f}")
+print(f"  AUC (Validation 20%): {val_auc:.4f}")
 
 if train_accuracy > (val_accuracy + 0.05):
-    print("\033[93m  ATTENZIONE: Possibile Overfitting! (Delta > 5%)\033[0m")
+    print("\033[93m  WARNING: Possible Overfitting! (Delta > 5%)\033[0m")
 else:
-    print("\033[92m  OK: Nessun segno evidente di overfitting.\033[0m")
+    print("\033[92m  OK: No evident overfitting.\033[0m")
 
-print("\n--- Classification Report (su 20% Validation) ---")
-print(classification_report(y_val, y_pred_val, target_names=['Falso (0)', 'Vero (1)']))
-report_dict_val = classification_report(y_val, y_pred_val, target_names=['Falso (0)', 'Vero (1)'], output_dict=True)
+print("\nClassification Report (on 20% Validation):\n")
+print(classification_report(y_val, y_pred_val, target_names=['Falso (0)', 'Vero (1)'], digits=4))
+report_dict_val = classification_report(y_val, y_pred_val, target_names=['Falso (0)', 'Vero (1)'], output_dict=True, digits=4)
 
-# Salvataggio report metriche
-print(f"Salvataggio metriche (Validation) in: {METRICS_OUTPUT_FILE}")
-metrics_data_val = {
-    'Metric': ['Accuracy (Training 60%)', 'Accuracy (Validation 20%)', 'AUC (Validation 20%)',
-               'Precision (Falso 0)', 'Recall (Falso 0)', 'F1-Score (Falso 0)',
-               'Precision (Vero 1)', 'Recall (Vero 1)', 'F1-Score (Vero 1)'],
-    'Score': [train_accuracy, val_accuracy, val_auc,
-              report_dict_val['Falso (0)']['precision'], report_dict_val['Falso (0)']['recall'], report_dict_val['Falso (0)']['f1-score'],
-              report_dict_val['Vero (1)']['precision'], report_dict_val['Vero (1)']['recall'], report_dict_val['Vero (1)']['f1-score']]
-}
-pd.DataFrame(metrics_data_val).to_csv(METRICS_OUTPUT_FILE, index=False, float_format='%.4f')
+# Save full classification report as text file
+print(f"Saving metrics (Validation) to: {REPORT_TXT_FILE}")
+report_text_val = classification_report(y_val, y_pred_val, target_names=['Falso (0)', 'Vero (1)'], digits=4)
+with open(REPORT_TXT_FILE, 'w') as f:
+    f.write("Classification Report (on 20% Validation):\n\n")
+    f.write(report_text_val)
+print(f"Full classification report saved to: {REPORT_TXT_FILE}")
 
+print("\nPhase 4: Saving Diagnostic Plots (Validation):\n")
 
-print("\n--- 4.2 Salvataggio Grafici Diagnostici (Validation) ---")
-
-# --- Confusion Matrix (Validation) ---
 cm_val = confusion_matrix(y_val, y_pred_val)
 plt.figure(figsize=(8, 6))
 sns.heatmap(cm_val, annot=True, fmt='d', cmap='Blues', 
-            xticklabels=['Predetto Falso (0)', 'Predetto Vero (1)'], 
-            yticklabels=['Reale Falso (0)', 'Reale Vero (1)'])
-plt.title("Confusion Matrix (su 20% Validation Set)")
+            xticklabels=['Predicted False (0)', 'Predicted True (1)'], 
+            yticklabels=['Actual False (0)', 'Actual True (1)'])
+plt.title("Confusion Matrix (20% Validation Set)")
 plt.savefig(CM_OUTPUT_FILE)
 plt.close()
-print(f"Grafico CM (Validation) salvato in: {CM_OUTPUT_FILE}")
+print(f"CM plot (Validation) saved to: {CM_OUTPUT_FILE}")
 
-# --- Feature Importance ---
 importances = model.get_feature_importance()
 feature_names = X_train.columns
 importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
 top_20_features = importance_df.sort_values(by='Importance', ascending=False).head(20)
-print("\nTop 20 Features più importanti:")
+print("\nTop 20 Most Important Features:")
 print(top_20_features.to_string(index=False))
 plt.figure(figsize=(12, 10))
 sns.barplot(x='Importance', y='Feature', data=top_20_features, palette='viridis')
@@ -196,9 +186,8 @@ plt.title('Top 20 Feature Importance (CatBoost)')
 plt.tight_layout()
 plt.savefig(IMPORTANCE_OUTPUT_FILE)
 plt.close()
-print(f"Grafico Feature Importance salvato in: {IMPORTANCE_OUTPUT_FILE}")
+print(f"Feature Importance plot saved to: {IMPORTANCE_OUTPUT_FILE}")
 
-# --- Grafici di Apprendimento ---
 results = model.get_evals_result()
 train_set_name = 'validation_0'
 valid_set_name = 'validation_1'
@@ -206,33 +195,32 @@ if 'Logloss' in results[train_set_name]:
     plt.figure(figsize=(10, 6))
     plt.plot(results[train_set_name]['Logloss'], label='Training Loss (60%)')
     plt.plot(results[valid_set_name]['Logloss'], label='Validation Loss (20%)')
-    plt.title('Curva di Apprendimento (Logloss)')
-    plt.xlabel('Iterazioni'); plt.ylabel('Logloss'); plt.legend(); plt.grid(True)
+    plt.title('Learning Curve (Logloss)')
+    plt.xlabel('Iterations'); plt.ylabel('Logloss'); plt.legend(); plt.grid(True)
     plt.savefig(LOSS_CURVE_FILE)
     plt.close()
-    print(f"Grafico curva Loss salvato in: {LOSS_CURVE_FILE}")
+    print(f"Loss curve plot saved to: {LOSS_CURVE_FILE}")
 if 'AUC' in results[train_set_name]:
     plt.figure(figsize=(10, 6))
     plt.plot(results[train_set_name]['AUC'], label='Training AUC (60%)')
     plt.plot(results[valid_set_name]['AUC'], label='Validation AUC (20%)')
-    plt.title('Curva di Apprendimento (AUC)')
-    plt.xlabel('Iterazioni'); plt.ylabel('AUC'); plt.legend(); plt.grid(True)
+    plt.title('Learning Curve (AUC)')
+    plt.xlabel('Iterations'); plt.ylabel('AUC'); plt.legend(); plt.grid(True)
     plt.savefig(AUC_CURVE_FILE)
     plt.close()
-    print(f"Grafico curva AUC salvato in: {AUC_CURVE_FILE}")
+    print(f"AUC learning curve plot saved to: {AUC_CURVE_FILE}")
 
-# --- Curva ROC-AUC (Validation) ---
 fpr_val, tpr_val, _ = roc_curve(y_val, y_pred_proba_val)
 plt.figure(figsize=(10, 8))
-plt.plot(fpr_val, tpr_val, color='blue', lw=2, label=f'Curva ROC (Validation AUC = {val_auc:.4f})')
-plt.plot([0, 1], [0, 1], color='red', lw=2, linestyle='--', label='Caso (AUC = 0.50)')
+plt.plot(fpr_val, tpr_val, color='blue', lw=2, label=f'ROC Curve (Validation AUC = {val_auc:.4f})')
+plt.plot([0, 1], [0, 1], color='red', lw=2, linestyle='--', label='Random Guess (AUC = 0.50)')
 plt.xlabel('False Positive Rate'); plt.ylabel('True Positive Rate')
-plt.title('Curva ROC-AUC (su 20% Validation Set)')
+plt.title('ROC-AUC Curve (20% Validation Set)')
 plt.legend(loc="lower right"); plt.grid(True)
 plt.savefig(ROC_CURVE_FILE)
 plt.close()
-print(f"Grafico curva ROC-AUC (Validation) salvato in: {ROC_CURVE_FILE}")
+print(f"ROC-AUC curve plot (Validation) saved to: {ROC_CURVE_FILE}")
 
-print("\n--- Ciclo di Tuning Completato ---")
-print(f"Controlla i risultati in {ANALYSIS_DIR}.")
-print("Se sei soddisfatto, esegui '18_final_holdout_test.py' per il test finale.")
+print("\nTuning cycle completed")
+print(f"Check results in {ANALYSIS_DIR}.")
+print("\n16_optimize_and_validate.py executed successfully.")

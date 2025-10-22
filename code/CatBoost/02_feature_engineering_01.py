@@ -1,75 +1,58 @@
+"""
+This script performs feature engineering for Pokémon battle data. It creates dynamic features
+by aggregating battle timelines, combines them with static battle features, and exports the
+resulting training and test feature sets as CSV files for model training.
+"""
+
 import pandas as pd
 import numpy as np
 import os
 
-# --- 1. Configurazione dei Percorsi ---
-INPUT_DIR = 'Output_CSVs'  # Leggiamo i CSV creati al Passo 1
-OUTPUT_DIR = 'Features'    # Salviamo i nuovi file di features qui
+INPUT_DIR = 'Output_CSVs'  
+OUTPUT_DIR = 'Features_v1'    
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-print(f"I CSV processati verranno salvati in: {OUTPUT_DIR}")
+print(f"Output directory confirmed: {OUTPUT_DIR}")
 
-# Percorsi file di input
 BATTLES_TRAIN_STATIC_IN = os.path.join(INPUT_DIR, 'battles_train_static.csv')
 TIMELINES_TRAIN_DYNAMIC_IN = os.path.join(INPUT_DIR, 'timelines_train_dynamic.csv')
 BATTLES_TEST_STATIC_IN = os.path.join(INPUT_DIR, 'battles_test_static.csv')
 TIMELINES_TEST_DYNAMIC_IN = os.path.join(INPUT_DIR, 'timelines_test_dynamic.csv')
 
-# Percorsi file di output
 FEATURES_TRAIN_OUT = os.path.join(OUTPUT_DIR, 'features_train.csv')
 FEATURES_TEST_OUT = os.path.join(OUTPUT_DIR, 'features_test.csv')
 
-
-# --- 2. Funzione per creare Features Dinamiche ---
-
+# Function to create aggregated dynamic features from battle timelines
 def create_dynamic_features(timelines_df):
-    """
-    Prende il DataFrame 'lungo' (timelines) e crea 
-    features aggregate per ogni battle_id.
-    """
-    
-    # Assicuriamoci che i dati siano ordinati per turno
-    # Questo è cruciale per features come 'last_hp'
     timelines_df = timelines_df.sort_values(by=['battle_id', 'turn'])
     
-    # Calcoliamo le somme dei boost
     boost_cols_p1 = [col for col in timelines_df.columns if 'p1_pokemon_state.boosts' in col]
     boost_cols_p2 = [col for col in timelines_df.columns if 'p2_pokemon_state.boosts' in col]
     
     timelines_df['p1_boosts_sum_turn'] = timelines_df[boost_cols_p1].sum(axis=1)
     timelines_df['p2_boosts_sum_turn'] = timelines_df[boost_cols_p2].sum(axis=1)
 
-    # Calcoliamo i Pokémon KO (fainted)
     timelines_df['p1_fainted_turn'] = (timelines_df['p1_pokemon_state.status'] == 'fnt').astype(int)
     timelines_df['p2_fainted_turn'] = (timelines_df['p2_pokemon_state.status'] == 'fnt').astype(int)
 
-    # Aggreghiamo per battle_id
-    # usiamo .agg() per fare tutti i calcoli in una volta
+    # Aggregate dynamic features across battle timelines
+    print("Starting aggregation of dynamic features...")
     
-    print("Inizio aggregazione features dinamiche...")
-    
-    # Definiamo le aggregazioni
     aggregations = {
-        # Features di Progresso
         'p1_pokemon_state.name': 'nunique',
         'p2_pokemon_state.name': 'nunique',
         'p1_fainted_turn': 'sum',
         'p2_fainted_turn': 'sum',
         
-        # Features di Stato (HP)
         'p1_pokemon_state.hp_pct': ['mean', 'last'],
         'p2_pokemon_state.hp_pct': ['mean', 'last'],
         
-        # Features di Stato (Boosts)
         'p1_boosts_sum_turn': 'sum',
         'p2_boosts_sum_turn': 'sum',
     }
     
-    # Eseguiamo il groupby
     dynamic_features_df = timelines_df.groupby('battle_id').agg(aggregations)
-    
-    # Puliamo i nomi delle colonne
-    # (Pandas crea nomi multi-livello, es. ('p1_pokemon_state.hp_pct', 'mean'))
+
     new_cols = []
     for col in dynamic_features_df.columns:
         if col[1] == '':
@@ -84,7 +67,6 @@ def create_dynamic_features(timelines_df):
             
     dynamic_features_df.columns = new_cols
     
-    # Rinominiamo le colonne calcolate
     dynamic_features_df = dynamic_features_df.rename(columns={
         'p1_fainted_turn_sum': 'p1_fainted_count',
         'p2_fainted_turn_sum': 'p2_fainted_count',
@@ -96,67 +78,59 @@ def create_dynamic_features(timelines_df):
         'p2_boosts_sum_turn_sum': 'p2_total_boosts',
     })
 
-    # Creiamo le features "delta" (differenza)
     dynamic_features_df['faint_delta'] = dynamic_features_df['p1_fainted_count'] - dynamic_features_df['p2_fainted_count']
     dynamic_features_df['hp_avg_delta'] = dynamic_features_df['p1_avg_hp_pct'] - dynamic_features_df['p2_avg_hp_pct']
     dynamic_features_df['final_hp_delta'] = dynamic_features_df['p1_hp_at_turn_30'] - dynamic_features_df['p2_hp_at_turn_30']
     dynamic_features_df['total_boosts_delta'] = dynamic_features_df['p1_total_boosts'] - dynamic_features_df['p2_total_boosts']
 
-    print("Aggregazione completata.")
+    print("Dynamic feature aggregation completed.")
     return dynamic_features_df
 
-
-# --- 3. Caricamento e Processamento Dati ---
-
-# --- TRAIN ---
-print("\n--- Processo di TRAIN ---")
-print(f"Caricamento {BATTLES_TRAIN_STATIC_IN}...")
+# Load training data and generate dynamic features
+print("\n   TRAINING PROCESS:\n")
+print(f"Loading training static data from {BATTLES_TRAIN_STATIC_IN}...")
 battles_train_df = pd.read_csv(BATTLES_TRAIN_STATIC_IN)
-print(f"Caricamento {TIMELINES_TRAIN_DYNAMIC_IN}...")
+print(f"Loading training dynamic timelines from {TIMELINES_TRAIN_DYNAMIC_IN}...")
 timelines_train_df = pd.read_csv(TIMELINES_TRAIN_DYNAMIC_IN)
 
-# Creiamo le features dinamiche per il train
 dynamic_features_train = create_dynamic_features(timelines_train_df)
 
-# Uniamo (merge) le features dinamiche al DataFrame statico
-print("Unione features statiche e dinamiche per il TRAIN...")
+# Merge static and dynamic features for training set
+print("Merging static and dynamic features for TRAINING...")
 features_train_df = pd.merge(
     battles_train_df, 
     dynamic_features_train, 
     on='battle_id', 
     how='left'
 )
-print(f"DataFrame finale di TRAIN creato con {features_train_df.shape[1]} colonne.")
+print(f"Final TRAINING DataFrame created with {features_train_df.shape[1]} columns.")
 
-
-# --- TEST ---
-print("\n--- Processo di TEST ---")
-print(f"Caricamento {BATTLES_TEST_STATIC_IN}...")
+# Load test data and generate dynamic features
+print("\n   TEST PROCESS:\n")
+print(f"Loading test static data from {BATTLES_TEST_STATIC_IN}...")
 battles_test_df = pd.read_csv(BATTLES_TEST_STATIC_IN)
-print(f"Caricamento {TIMELINES_TEST_DYNAMIC_IN}...")
+print(f"Loading test dynamic timelines from {TIMELINES_TEST_DYNAMIC_IN}...")
 timelines_test_df = pd.read_csv(TIMELINES_TEST_DYNAMIC_IN)
 
-# Creiamo le features dinamiche per il test
 dynamic_features_test = create_dynamic_features(timelines_test_df)
 
-# Uniamo (merge) le features dinamiche al DataFrame statico
-print("Unione features statiche e dinamiche per il TEST...")
+# Merge static and dynamic features for test set
+print("Merging static and dynamic features for TESTING...")
 features_test_df = pd.merge(
     battles_test_df, 
     dynamic_features_test, 
     on='battle_id', 
     how='left'
 )
-print(f"DataFrame finale di TEST creato con {features_test_df.shape[1]} colonne.")
+print(f"Final TEST DataFrame created with {features_test_df.shape[1]} columns.")
 
-
-# --- 4. Salvataggio DataFrame Finali ---
-print("\nSalvataggio dei DataFrame finali...")
+# Save final feature sets to output directory
+print("\nSaving final feature DataFrames...")
 features_train_df.to_csv(FEATURES_TRAIN_OUT, index=False)
 features_test_df.to_csv(FEATURES_TEST_OUT, index=False)
 
-print(f"Salvataggio completato! File creati:")
+print("Save completed.\nThe following files have been created:")
 print(f"  {FEATURES_TRAIN_OUT}")
 print(f"  {FEATURES_TEST_OUT}")
 
-print("\nPasso 2 completato.")
+print("\n02_feature_engineering_01.py executed successfully.")
