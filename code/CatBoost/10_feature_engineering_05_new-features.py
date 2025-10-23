@@ -28,6 +28,8 @@ except ImportError:
 # 2. Inizializza le liste vuote
 STATUS_MOVES = []
 HEALING_MOVES = []
+BOOSTING_MOVES = [] # <<< NUOVO
+DEBUFFING_MOVES = []
 
 # 3. Scorre il dizionario e popola le liste
 for move_name, effects_list in MOVE_EFFECTS_DETAILED.items():
@@ -39,9 +41,22 @@ for move_name, effects_list in MOVE_EFFECTS_DETAILED.items():
     # Se 'healing' è negli effetti, aggiungilo alla lista HEALING
     if 'healing' in effects_list:
         HEALING_MOVES.append(move_name)
+        
+    # <<< INIZIO NUOVA LOGICA >>>
+    # Se 'user_boost' è negli effetti, aggiungilo alla lista BOOSTING
+    if 'user_boost' in effects_list:
+        BOOSTING_MOVES.append(move_name)
+        
+    # Se 'opponent_debuff' è negli effetti, aggiungilo alla lista DEBUFFING
+    if 'opponent_debuff' in effects_list:
+        DEBUFFING_MOVES.append(move_name)
+    # <<< FINE NUOVA LOGICA >>>
 
-print(STATUS_MOVES)
-print(HEALING_MOVES)
+# (Opzionale) Ordina le liste alfabeticamente per coerenza
+STATUS_MOVES.sort()
+HEALING_MOVES.sort()
+BOOSTING_MOVES.sort() # <<< NUOVO
+DEBUFFING_MOVES.sort() # <<< NUOVO
 
 # Function to build a Pokédex dictionary from static battle data
 def build_pokedex():
@@ -90,14 +105,20 @@ def process_timeline_expert_features(timeline_df, pokedex):
         
         p1_is_status_move = 1 if move_name_p1 in STATUS_MOVES else 0
         p1_is_healing_move = 1 if move_name_p1 in HEALING_MOVES else 0
+        p1_is_boosting_move = 1 if move_name_p1 in BOOSTING_MOVES else 0 # <<< NUOVO
+        p1_is_debuffing_move = 1 if move_name_p1 in DEBUFFING_MOVES else 0 # <<< NUOVO
         
         p2_is_status_move = 1 if move_name_p2 in STATUS_MOVES else 0
         p2_is_healing_move = 1 if move_name_p2 in HEALING_MOVES else 0
+        p2_is_boosting_move = 1 if move_name_p2 in BOOSTING_MOVES else 0 # <<< NUOVO
+        p2_is_debuffing_move = 1 if move_name_p2 in DEBUFFING_MOVES else 0 # <<< NUOVO
         
         return pd.Series([
             p1_is_stab, p2_is_stab,
             p1_is_status_move, p1_is_healing_move,
-            p2_is_status_move, p2_is_healing_move
+            p1_is_boosting_move, p1_is_debuffing_move,
+            p2_is_status_move, p2_is_healing_move,
+            p2_is_boosting_move, p2_is_debuffing_move
         ])
 
     print("... applying per-turn calculations...")
@@ -105,7 +126,9 @@ def process_timeline_expert_features(timeline_df, pokedex):
     new_features_per_turn.columns = [
         'p1_is_stab', 'p2_is_stab',
         'p1_is_status_move', 'p1_is_healing_move',
-        'p2_is_status_move', 'p2_is_healing_move'
+        'p1_is_boosting_move', 'p1_is_debuffing_move',
+        'p2_is_status_move', 'p2_is_healing_move',
+        'p2_is_boosting_move', 'p2_is_debuffing_move'
     ]
     
     timeline_df = pd.concat([timeline_df, new_features_per_turn], axis=1)
@@ -117,8 +140,12 @@ def process_timeline_expert_features(timeline_df, pokedex):
         'p2_is_stab': 'sum',
         'p1_is_status_move': 'sum',
         'p1_is_healing_move': 'sum',
+        'p1_is_boosting_move': 'sum', # <<< NUOVO
+        'p1_is_debuffing_move': 'sum', # <<< NUOVO
         'p2_is_status_move': 'sum',
-        'p2_is_healing_move': 'sum'
+        'p2_is_healing_move': 'sum',
+        'p2_is_boosting_move': 'sum', # <<< NUOVO
+        'p2_is_debuffing_move': 'sum' # <<< NUOVO
     }
     
     expert_features_df = timeline_df.groupby('battle_id').agg(aggregations)
@@ -128,13 +155,19 @@ def process_timeline_expert_features(timeline_df, pokedex):
         'p2_is_stab': 'p2_stab_move_count',
         'p1_is_status_move': 'p1_status_move_count',
         'p1_is_healing_move': 'p1_healing_move_count',
+        'p1_is_boosting_move': 'p1_boosting_move_count', # <<< NUOVO
+        'p1_is_debuffing_move': 'p1_debuffing_move_count', # <<< NUOVO
         'p2_is_status_move': 'p2_status_move_count',
-        'p2_is_healing_move': 'p2_healing_move_count'
+        'p2_is_healing_move': 'p2_healing_move_count',
+        'p2_is_boosting_move': 'p2_boosting_move_count', # <<< NUOVO
+        'p2_is_debuffing_move': 'p2_debuffing_move_count' # <<< NUOVO
     })
 
     expert_features_df['stab_delta'] = expert_features_df['p1_stab_move_count'] - expert_features_df['p2_stab_move_count']
     expert_features_df['status_move_delta'] = expert_features_df['p1_status_move_count'] - expert_features_df['p2_status_move_count']
     expert_features_df['healing_move_delta'] = expert_features_df['p1_healing_move_count'] - expert_features_df['p2_healing_move_count']
+    expert_features_df['boosting_move_delta'] = expert_features_df['p1_boosting_move_count'] - expert_features_df['p2_boosting_move_count'] # <<< NUOVO
+    expert_features_df['debuffing_move_delta'] = expert_features_df['p1_debuffing_move_count'] - expert_features_df['p2_debuffing_move_count'] # <<< NUOVO
 
     print("Expert feature aggregation completed.")
     return expert_features_df

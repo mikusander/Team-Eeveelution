@@ -1,0 +1,9 @@
+{
+  "learning_rate": 0.01360110293604794,
+  "depth": 5,
+  "l2_leaf_reg": 5.0137768318453015,
+  "objective": "Logloss",
+  "eval_metric": "AUC",
+  "verbose": 0,
+  "random_seed": 42
+}

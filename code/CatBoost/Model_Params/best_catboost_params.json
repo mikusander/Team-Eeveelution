@@ -1,7 +1,7 @@
 {
-  "learning_rate": 0.01360110293604794,
-  "depth": 5,
-  "l2_leaf_reg": 3.0137768318453015,
+  "learning_rate": 0.02022548283447803,
+  "depth": 6,
+  "l2_leaf_reg": 6.64078864790378,
   "objective": "Logloss",
   "eval_metric": "AUC",
   "verbose": 0,

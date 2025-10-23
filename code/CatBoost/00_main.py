@@ -4,7 +4,7 @@ import os
 import time
 
 
-RERUN_DATA_PREPROCESSING = True
+RERUN_DATA_PREPROCESSING = False
 
 data_scripts = [
     '01_load_data.py',
