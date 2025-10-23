@@ -1,10 +1,10 @@
-MOVE_CATEGORIES = { 
-  'agility': 'STATUS',
+# Categorie delle mosse
+MOVE_CATEGORIES = { 'agility': 'STATUS',
   'amnesia': 'STATUS',
   'blizzard': 'SPECIAL',
   'bodyslam': 'PHYSICAL',
   'clamp': 'SPECIAL',
-  'confuseray': 'STATUS', #manca
+  'confuseray': 'STATUS',
   'counter': 'PHYSICAL',
   'doubleedge': 'PHYSICAL',
   'doublekick': 'PHYSICAL',
@@ -27,7 +27,7 @@ MOVE_CATEGORIES = {
   'rockslide': 'PHYSICAL',
   'seismictoss': 'PHYSICAL',
   'selfdestruct': 'PHYSICAL',
-  'sing': 'STATUS', #manca
+  'sing': 'STATUS',
   'slash': 'PHYSICAL',
   'sleeppowder': 'STATUS',
   'softboiled': 'STATUS',

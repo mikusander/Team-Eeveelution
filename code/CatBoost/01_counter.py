@@ -4,33 +4,24 @@ import traceback
 from collections import defaultdict
 
 def save_raw_counts(counts, filename="move_stats_raw.py"):
-    """
-    Salva il dizionario grezzo dei conteggi {mossa: {total_uses: X, effects: {...}}}
-    """
     try:
-        # --- INIZIO MODIFICA ---
-        # Converti i defaultdict interni in dict normali per una stampa pulita
         cleaned_counts = {}
         for move, data in counts.items():
             cleaned_counts[move] = {
                 'total_uses': data['total_uses'],
-                'effects': dict(data['effects']) # Converte il defaultdict interno
+                'effects': dict(data['effects'])  
             }
-        # --- FINE MODIFICA ---
 
         with open(filename, "w", encoding="utf-8") as f:
-            f.write("# Questo file è stato generato automaticamente\n")
-            f.write("# Contiene i CONTEGGI GREZZI di usi/effetti per ogni mossa.\n\n")
+            f.write("# This file was generated automatically\n")
+            f.write("# Contains the RAW counts of uses/effects for each move.\n\n")
             f.write("MOVE_STATS_RAW = ")
-            # Salva il dizionario pulito, non il defaultdict
-            pprint.pprint(cleaned_counts, stream=f, indent=2, width=120) # <<< MODIFICA
-            
-        print(f"Conteggi grezzi salvati con successo in '{filename}'")
+            pprint.pprint(cleaned_counts, stream=f, indent=2, width=120) 
+
+        print(f"Raw counts successfully saved to '{filename}'")
         
     except IOError as e:
-        print(f"Errore durante il salvataggio del file: {e}")
-
-# --- ESECUZIONE DELLO SCRIPT (FASE 1) ---
+        print(f"Error saving file: {e}")
 
 if __name__ == "__main__":
     
@@ -109,22 +100,21 @@ if __name__ == "__main__":
                                 move_stats[p1_move["name"]]['effects']['opponent_debuff'] += 1
                         
                 except json.JSONDecodeError:
-                    print(f"Attenzione: saltata riga non-JSON (riga {line_number}).")
+                    print(f"Attention: skipped non-JSON line (line {line_number}).")
                 except Exception as e:
-                    print(f"Errore imprevisto analizzando la riga {line_number}: {e}")
-    
-        # Salva i conteggi grezzi (ora puliti)
-        save_raw_counts(move_stats) # <<< MODIFICA (passa il defaultdict, la funzione pulisce)
-        
+                    print(f"Unexpected error parsing line {line_number}: {e}")
+
+        save_raw_counts(move_stats)
+
         with open("move_categories_raw.py", "w", encoding="utf-8") as f:
-            f.write("# Categorie delle mosse\n")
+            f.write("# Move categories\n")
             f.write("MOVE_CATEGORIES = ")
             pprint.pprint(move_categories, stream=f, indent=2)
-            
-        print("Categorie delle mosse salvate in 'move_categories_raw.py'")
+
+        print("Move categories saved to 'move_categories_raw.py'")
 
     except FileNotFoundError:
-        print(f"ERRORE: File non trovato. Assicurati che '{input_file}' esista.")
+        print(f"ERROR: File not found. Make sure '{input_file}' exists.")
     except Exception as e:
-        print(f"Errore imprevisto durante la lettura del file: {e}")
+        print(f"Unexpected error reading file: {e}")
         traceback.print_exc()

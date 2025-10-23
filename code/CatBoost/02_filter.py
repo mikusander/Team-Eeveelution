@@ -1,23 +1,18 @@
 import pprint
 from collections import defaultdict
 
-# --- 1. IMPORTA I DATI GREZZI ---
 try:
     from move_stats_raw import MOVE_STATS_RAW
     from move_categories_raw import MOVE_CATEGORIES
 except ImportError:
-    print("ERRORE: File 'move_stats_raw.py' o 'move_categories_raw.py' non trovati.")
-    print("Assicurati di eseguire prima lo script 'counter.py'.")
+    print("ERROR: File 'move_stats_raw.py' or 'move_categories_raw.py' not found.")
+    print("Make sure to run the 'counter.py' script first.")
     exit()
 
-# --- 2. DEFINISCI LE TUE SOGLIE (Thresholds) ---
-# Queste soglie sono per la logica PRINCIPALE
-PRIMARY_THRESHOLD = 0.30 # 30%
-SECONDARY_THRESHOLD = 0.01 # 1%
+PRIMARY_THRESHOLD = 0.30 
+SECONDARY_THRESHOLD = 0.01 
 MIN_USES = 1
 
-
-# --- 3. ESEGUI IL FILTRO (FASE 2) ---
 final_move_effects = {}
 
 for move_name, data in sorted(MOVE_STATS_RAW.items()):
@@ -30,8 +25,6 @@ for move_name, data in sorted(MOVE_STATS_RAW.items()):
     effects = data['effects']
     
     final_effects = set()
-
-    # --- Logica Principale (Prova prima questa) ---
     
     if category in ["PHYSICAL", "SPECIAL"]:
         if 'damage' in effects and effects['damage'] > 0:
@@ -55,41 +48,33 @@ for move_name, data in sorted(MOVE_STATS_RAW.items()):
         if 'opponent_debuff' in effects and (effects['opponent_debuff'] / total_uses) >= PRIMARY_THRESHOLD:
             final_effects.add('opponent_debuff')
 
-    # --- NUOVA Logica di Fallback (Come da tua richiesta) ---
-    # Se la logica principale ha fallito e non ha trovato NESSUN effetto...
-    if not final_effects and effects: # 'effects' non è vuoto
-        
-        # ...allora trova l'effetto (non-rumore) con il conteggio più alto.
+    if not final_effects and effects: 
         possible_effects = {}
         if category == "STATUS":
             for effect, count in effects.items():
-                if effect != 'damage': # Ignora il rumore del danno
+                if effect != 'damage': 
                     possible_effects[effect] = count
         elif category in ["PHYSICAL", "SPECIAL"]:
             for effect, count in effects.items():
-                if effect not in ['user_boost', 'user_status']: # Ignora il rumore dei boost
+                if effect not in ['user_boost', 'user_status']: 
                     possible_effects[effect] = count
         
         if possible_effects:
-            # Prendi solo l'effetto migliore
             best_effect = max(possible_effects, key=possible_effects.get)
             final_effects.add(best_effect)
             
-    # --- Fine Logica di Fallback ---
-
     if final_effects:
         final_move_effects[move_name] = sorted(list(final_effects))
 
-# --- 4. SALVA L'OUTPUT FINALE PULITO ---
 try:
     with open("move_effects_final.py", "w", encoding="utf-8") as f:
-        f.write("# Questo file è stato generato automaticamente\n")
-        f.write("# Contiene la lista di effetti PULITA, basata sui filtri\n")
-        f.write(f"# (Soglia Primaria: {PRIMARY_THRESHOLD*100}%, Fallback: Max Conteggio)\n\n")
+        f.write("# This file was generated automatically\n")
+        f.write("# Contains the CLEANED list of effects, based on filters\n")
+        f.write(f"# (Primary Threshold: {PRIMARY_THRESHOLD*100}%, Fallback: Max Count)\n\n")
         f.write("MOVE_EFFECTS_DETAILED = ")
         pprint.pprint(final_move_effects, stream=f, indent=2, width=120)
-        
-    print(f"Output finale pulito salvato in 'move_effects_final.py'")
-    
+
+    print(f"Cleaned final output saved to 'move_effects_final.py'")
+
 except IOError as e:
-    print(f"Errore durante il salvataggio del file finale: {e}")
+    print(f"Error saving final file: {e}")

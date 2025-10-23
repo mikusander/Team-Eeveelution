@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 import os
 
-INPUT_DIR = 'Features'
+INPUT_DIR = 'Features_v1'
 OUTPUT_DIR = 'Features_v2' 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
