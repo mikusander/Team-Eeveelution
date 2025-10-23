@@ -15,7 +15,19 @@ os.makedirs(FEATURES_FINAL_DIR, exist_ok=True)
 
 print(f"Final feature files will be saved in: {FEATURES_FINAL_DIR}")
 
-NEGATIVE_STATUSES = ['par', 'slp', 'frz', 'psn', 'brn']
+try:
+    from unique_statuses import STATUSES
+except ImportError:
+    print("ERRORE: File 'move_effects_final.py' non trovato.")
+    print("Assicurati di aver eseguito prima gli script 'counter.py' e 'filter.py'.")
+    STATUSES = {}
+
+NEGATIVE_STATUSES = []
+
+for x in STATUSES:
+    NEGATIVE_STATUSES.append(x)
+
+print(NEGATIVE_STATUSES)
 
 # Function to calculate per-battle status condition features
 def create_status_features(timeline_df):

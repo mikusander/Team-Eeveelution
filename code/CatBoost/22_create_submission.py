@@ -16,9 +16,9 @@ SUBMISSION_DIR = 'Submissions'
 FEATURES_V5_DIR = 'Features_v5'
 os.makedirs(SUBMISSION_DIR, exist_ok=True)
 
-TRAIN_FILE = os.path.join(PREPROCESSED_DIR, 'train_processed.csv')
+TRAIN_FILE = os.path.join(PREPROCESSED_DIR, 'train_processed_selected.csv')
 TARGET_FILE = os.path.join(PREPROCESSED_DIR, 'target_train.csv')
-TEST_FILE = os.path.join(PREPROCESSED_DIR, 'test_processed.csv') 
+TEST_FILE = os.path.join(PREPROCESSED_DIR, 'test_processed_selected.csv') 
 PARAMS_FILE = os.path.join(MODEL_PARAMS_DIR, 'best_catboost_params.json')
 ITERATION_FILE = os.path.join(MODEL_PARAMS_DIR, 'best_iteration.json')
 

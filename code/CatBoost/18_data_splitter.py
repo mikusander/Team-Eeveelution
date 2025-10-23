@@ -6,7 +6,7 @@ PREPROCESSED_DIR = 'Preprocessed_Data'
 SPLIT_DIR = 'Preprocessed_Splits' 
 os.makedirs(SPLIT_DIR, exist_ok=True)
 
-TRAIN_FILE = os.path.join(PREPROCESSED_DIR, 'train_processed.csv')
+TRAIN_FILE = os.path.join(PREPROCESSED_DIR, 'train_processed_selected.csv')
 TARGET_FILE = os.path.join(PREPROCESSED_DIR, 'target_train.csv')
 
 print("Avvio Script di divisione 60/20/20...")

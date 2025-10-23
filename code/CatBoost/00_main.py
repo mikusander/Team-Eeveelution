@@ -4,32 +4,34 @@ import os
 import time
 
 
-RERUN_DATA_PREPROCESSING = True
+RERUN_DATA_PREPROCESSING = False
 
 data_scripts = [
     '01_counter.py',
     '02_filter.py',
-    '03_load_data.py',
-    '04_feature_engineering_01.py',
-    '05_analysis_v1.py',
-    '06_feature_engineering_02.py',
-    '07_analysis_v2.py',
-    '08_feature_engineering_03.py',
-    '09_analysis_v3.py',
-    '10_feature_engineering_04.py',
-    '11_analysis_v4.py',
-    '12_feature_engineering_05.py',
-    '13_analysis_v5.py',
-    '14_preprocessing.py',
-    '15_verify_preprocessing.py'
+    '03_process_status.py',
+    '04_load_data.py',
+    '05_feature_engineering_01.py',
+    '06_analysis_v1.py',
+    '07_feature_engineering_02.py',
+    '08_analysis_v2.py',
+    '09_feature_engineering_03.py',
+    '10_analysis_v3.py',
+    '11_feature_engineering_04.py',
+    '12_analysis_v4.py',
+    '13_feature_engineering_05.py',
+    '14_analysis_v5.py',
+    '15_preprocessing.py',
+    '16_verify_preprocessing.py',
+    '17_feature_selection.py'
 ]
 
 model_scripts = [
-    '16_data_splitter.py',
-    '17_optimize_and_validate.py',
-    '18_final_holdout_test_60.py',
-    '19_final_holdout_test_80.py',
-    '20_create_submission.py'
+    '18_data_splitter.py',
+    '19_optimize_and_validate.py',
+    '20_final_holdout_test_60.py',
+    '21_final_holdout_test_80.py',
+    '22_create_submission.py'
 ]
 
 PREPROCESSED_DIR = 'Preprocessed_Data'
