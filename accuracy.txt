@@ -1,2 +1,0 @@
-Mean CV Accuracy: 0.8203
-Best GridSearchCV Accuracy: 0.8188

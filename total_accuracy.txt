@@ -1,1 +1,0 @@
-Total Training Accuracy: 0.8581

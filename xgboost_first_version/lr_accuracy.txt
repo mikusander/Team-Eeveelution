@@ -1,0 +1,3 @@
+Mean CV Accuracy: 0.6725
+Holdout Accuracy: 0.6910
+Total Training Accuracy: 0.6935
