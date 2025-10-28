@@ -1,0 +1,42 @@
+============================================================
+ RIEPILOGO TRAINING MODELLO LSTM (v5 - Ibrido: True) 
+============================================================
+
+Timestamp: 2025-10-28 18:05:35
+Modalità Esecuzione: CARICAMENTO MODELLO
+
+--- Iperparametri Utilizzati ---
+{ 'dense_units': 384,
+  'dropout': 0.6,
+  'embed_dim_category': 16,
+  'embed_dim_move': 20,
+  'embed_dim_name': 10,
+  'embed_dim_type': 8,
+  'learning_rate': 0.0001,
+  'lstm_units_cat': 64,
+  'lstm_units_num': 96,
+  'optimal_epoch': 13,
+  'static_dense_units': 128,
+  'static_dropout': 0.1}
+
+--- Performance Metrics ---
+Epoca ottimale utilizzata/trovata: 13
+Accuracy (Training 60%):   0.8503
+Accuracy (Validation 20%): 0.8375
+AUC (Validation 20%):      0.8968
+Overfitting Check:   OK: No overfitting evidente. (Delta: 1.28%)
+
+--- Classification Report (Validation 20%) ---
+              precision    recall  f1-score   support
+
+           0     0.8325    0.8450    0.8387      1000
+           1     0.8426    0.8300    0.8363      1000
+
+    accuracy                         0.8375      2000
+   macro avg     0.8376    0.8375    0.8375      2000
+weighted avg     0.8376    0.8375    0.8375      2000
+
+
+--- Percorsi File ---
+Modello utilizzato/salvato: Model_Params_LSTM_Advanced/best_lstm_model_advanced.keras
+Parametri utilizzati/salvati: Model_Params_LSTM_Advanced/best_lstm_params_advanced.json

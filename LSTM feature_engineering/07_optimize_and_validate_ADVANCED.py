@@ -1,11 +1,18 @@
 # Nome file: 07_optimize_and_validate_ADVANCED.py
 """
-Versione AVANZATA (per feature sequenziali SUPER-AVANZATE)
+Versione AVANZATA (per feature sequenziali SUPER-AVANZATE v2)
 con opzione per saltare il tuning KerasTuner.
 Usa architettura LSTM Two-Branch (Num + Cat potenziato).
 Usa BayesianOptimization.
 Salva i risultati in un file di testo.
 AGGIUNTO controllo overfitting (Train vs Val Accuracy).
+
+MODIFICATO (v5 - IBRIDO):
+- Aggiunta logica per CARICARE OPZIONALMENTE le feature statiche da 05b.
+- La funzione build_model ora costruisce un modello a 2 o 3 input
+  in base alla variabile global STATIC_FEATURES_EXIST.
+- Aggiunti iperparametri per il ramo statico (static_dense_units, static_dropout).
+- Mantenuti i parametri di tuning stabili (low LR, high dropout) della v4.
 """
 
 import numpy as np
@@ -20,7 +27,7 @@ import time
 import pprint
 
 # --- Flag di Controllo ---
-RUN_KERAS_TUNER = True # MODIFICA QUI SE NECESSARIO
+RUN_KERAS_TUNER = False # MODIFICA QUI SE NECESSARIO
 # -------------------------
 
 # --- Set Random Seeds ---
@@ -45,6 +52,14 @@ SUMMARY_FILE = os.path.join(ANALYSIS_DIR, 'training_summary_advanced.txt')
 PARAMS_FILE = os.path.join(MODEL_PARAMS_DIR, 'best_lstm_params_advanced.json')
 MODEL_FILE = os.path.join(MODEL_PARAMS_DIR, 'best_lstm_model_advanced.keras')
 
+# --- NUOVO: Percorsi file statici (opzionali) ---
+X_TRAIN_STATIC_FILE = os.path.join(SPLIT_DIR, 'train_60_static.npy')
+X_VAL_STATIC_FILE = os.path.join(SPLIT_DIR, 'val_20_static.npy')
+# --- Globals per la build_model ---
+STATIC_FEATURES_EXIST = False
+NUM_STATIC_FEATURES = 0
+# ---------------------------------------------
+
 # --- 2. Carica i Dati e Determina Dimensioni ---
 print("Caricamento dati (60% Train, 20% Validation)...")
 try:
@@ -58,47 +73,81 @@ try:
 
     with open(ENCODERS_FILE, 'r') as f:
         encoders = json.load(f)
-    # Pokedex non serve qui direttamente, ma carichiamo encoders
+
+    # --- NUOVO: Controllo e Caricamento Dati Statici ---
+    STATIC_FEATURES_EXIST = os.path.exists(X_TRAIN_STATIC_FILE)
+    if STATIC_FEATURES_EXIST:
+        print(f"Trovate feature statiche ibride in '{SPLIT_DIR}'. Caricamento...")
+        X_train_static = np.load(X_TRAIN_STATIC_FILE)
+        X_val_static = np.load(X_VAL_STATIC_FILE)
+        NUM_STATIC_FEATURES = X_train_static.shape[1]
+        print(f"Caricate {NUM_STATIC_FEATURES} feature statiche.")
+        # Crea dizionario a 3 input
+        X_train_inputs = {
+            'input_numeric': X_train_num,
+            'input_categorical': X_train_cat.astype(np.int32),
+            'input_static': X_train_static
+        }
+        X_val_inputs = {
+            'input_numeric': X_val_num,
+            'input_categorical': X_val_cat.astype(np.int32),
+            'input_static': X_val_static
+        }
+    else:
+        print(f"Feature statiche ibride NON trovate. Si procederà con modello LSTM puro.")
+        # Crea dizionario a 2 input
+        X_train_inputs = {
+            'input_numeric': X_train_num,
+            'input_categorical': X_train_cat.astype(np.int32)
+        }
+        X_val_inputs = {
+            'input_numeric': X_val_num,
+            'input_categorical': X_val_cat.astype(np.int32)
+        }
+    # --------------------------------------------------
 
 except Exception as e:
     print(f"❌ ERRORE durante il caricamento dei dati o encoders: {e}")
     exit()
 
-# --- Correzione Tipi di Dati ---
-print(f"Tipo dati categorici (prima): {X_train_cat.dtype}")
-X_train_cat = X_train_cat.astype(np.int32)
-X_val_cat = X_val_cat.astype(np.int32)
-print(f"Tipo dati categorici (dopo): {X_train_cat.dtype}")
-
 # Ottieni dimensioni input DAI FILE CARICATI
 MAX_TURNS = X_train_num.shape[1]
 try:
     NUM_NUMERIC_FEATURES = X_train_num.shape[2]
-    NUM_CATEGORICAL_FEATURES = X_train_cat.shape[2] # Ora dovrebbe essere 6 (nome1, nome2, mossa1, mossa2, tipo1, tipo2)
+    NUM_CATEGORICAL_FEATURES = X_train_cat.shape[2] # Dovrebbe essere 8
     print(f"Dimensioni input RILEVATE: MAX_TURNS={MAX_TURNS}, NUM_NUMERIC={NUM_NUMERIC_FEATURES}, NUM_CATEGORICAL={NUM_CATEGORICAL_FEATURES}")
-    if NUM_CATEGORICAL_FEATURES != 6:
-         print(f"⚠️ ATTENZIONE: Numero feature categoriche ({NUM_CATEGORICAL_FEATURES}) diverso da 6. Verifica lo script 05.")
+    if NUM_CATEGORICAL_FEATURES != 8:
+         print(f"⚠️ ATTENZIONE: Numero feature categoriche ({NUM_CATEGORICAL_FEATURES}) diverso da 8. Verifica lo script 05.")
 except Exception as e:
     print(f"❌ ERRORE: Impossibile determinare le dimensioni: {e}")
     exit()
 
-X_train_inputs = { 'input_numeric': X_train_num, 'input_categorical': X_train_cat }
-X_val_inputs = { 'input_numeric': X_val_num, 'input_categorical': X_val_cat }
+print(f"Dati caricati e pronti per Keras (Modalità Ibrida: {STATIC_FEATURES_EXIST}).")
 
-print("Dati caricati e pronti per Keras (Architettura Two-Branch Potenziata).")
-
-# --- 3. Definizione Modello (AGGIORNATO per 6 Input Categorici) ---
+# --- 3. Definizione Modello (AGGIORNATO per input statico OPZIONALE) ---
 def build_model(hp):
-    """Costruisce il modello Keras con ramo numerico + ramo categorico potenziato."""
-    # HP (potremmo espandere un po' i range dato l'input più ricco)
-    hp_lstm_units_num = hp.Choice('lstm_units_num', values=[32, 64, 96]) # Aggiunto 96
-    hp_lstm_units_cat = hp.Choice('lstm_units_cat', values=[64, 128, 192]) # Aggiunto 192
+    """Costruisce il modello Keras con ramo numerico + ramo categorico potenziato (8 features)
+       e un TERZO RAMO OPZIONALE per le feature statiche."""
+    
+    # --- HP Ibridi (v5) ---
+    # Rami LSTM (v4)
+    hp_lstm_units_num = hp.Choice('lstm_units_num', values=[32, 64, 96, 128]) 
+    hp_lstm_units_cat = hp.Choice('lstm_units_cat', values=[64, 128, 192, 256]) 
     hp_embed_dim_name = hp.Choice('embed_dim_name', values=[10, 20, 32])
     hp_embed_dim_move = hp.Choice('embed_dim_move', values=[10, 20, 32])
-    hp_embed_dim_type = hp.Choice('embed_dim_type', values=[8, 16]) # Nuovo HP per Embedding Tipi
-    hp_dense_units = hp.Int('dense_units', 64, 256, step=64) # Range più ampio
-    hp_dropout = hp.Float('dropout', min_value=0.3, max_value=0.7, step=0.1) # Range più ampio
-    hp_learning_rate = hp.Choice('learning_rate', values=[1e-3, 5e-4, 1e-4])
+    hp_embed_dim_type = hp.Choice('embed_dim_type', values=[8, 16]) 
+    hp_embed_dim_category = hp.Choice('embed_dim_category', values=[8, 16]) 
+    
+    # Testa (v4)
+    hp_dense_units = hp.Int('dense_units', 128, 384, step=64) 
+    hp_dropout = hp.Float('dropout', min_value=0.5, max_value=0.7, step=0.1) 
+    hp_learning_rate = hp.Choice('learning_rate', values=[1e-4, 5e-5])
+    
+    # --- NUOVO: HP per Ramo Statico (solo se esiste) ---
+    if STATIC_FEATURES_EXIST:
+        hp_static_dense_units = hp.Int('static_dense_units', 32, 128, step=32)
+        hp_static_dropout = hp.Float('static_dropout', 0.1, 0.5, step=0.1)
+    # ----------------------------------------------------
 
     # --- Architettura ---
     model_inputs = []
@@ -110,39 +159,56 @@ def build_model(hp):
     lstm_numeric_out = layers.LSTM(hp_lstm_units_num, return_sequences=False)(input_numeric)
     branches_to_concat.append(lstm_numeric_out)
 
-    # --- Ramo 2: Dati Categorici (AGGIORNATO) ---
+    # --- Ramo 2: Dati Categorici (8 features, invariato) ---
     input_categorical = layers.Input(shape=(MAX_TURNS, NUM_CATEGORICAL_FEATURES), name='input_categorical', dtype='int32')
     model_inputs.append(input_categorical)
 
-    # Estrai i 6 canali usando Lambda
+    # Estrai gli 8 canali usando Lambda
     p1_name_in = layers.Lambda(lambda x: x[:, :, 0])(input_categorical)
     p2_name_in = layers.Lambda(lambda x: x[:, :, 1])(input_categorical)
     p1_move_in = layers.Lambda(lambda x: x[:, :, 2])(input_categorical)
     p2_move_in = layers.Lambda(lambda x: x[:, :, 3])(input_categorical)
-    p1_type_in = layers.Lambda(lambda x: x[:, :, 4])(input_categorical) # NUOVO
-    p2_type_in = layers.Lambda(lambda x: x[:, :, 5])(input_categorical) # NUOVO
+    p1_type_in = layers.Lambda(lambda x: x[:, :, 4])(input_categorical) 
+    p2_type_in = layers.Lambda(lambda x: x[:, :, 5])(input_categorical)
+    p1_category_in = layers.Lambda(lambda x: x[:, :, 6])(input_categorical) 
+    p2_category_in = layers.Lambda(lambda x: x[:, :, 7])(input_categorical) 
 
     # Embedding (senza mask_zero)
     embed_p1_name = layers.Embedding(input_dim=encoders['p1_pokemon_state.name']['vocab_size'], output_dim=hp_embed_dim_name, mask_zero=False)(p1_name_in)
     embed_p2_name = layers.Embedding(input_dim=encoders['p2_pokemon_state.name']['vocab_size'], output_dim=hp_embed_dim_name, mask_zero=False)(p2_name_in)
     embed_p1_move = layers.Embedding(input_dim=encoders['p1_move_details.name']['vocab_size'], output_dim=hp_embed_dim_move, mask_zero=False)(p1_move_in)
     embed_p2_move = layers.Embedding(input_dim=encoders['p2_move_details.name']['vocab_size'], output_dim=hp_embed_dim_move, mask_zero=False)(p2_move_in)
-    # NUOVI Embedding per Tipi Mosse
     embed_p1_type = layers.Embedding(input_dim=encoders['p1_move_details.type']['vocab_size'], output_dim=hp_embed_dim_type, mask_zero=False)(p1_type_in)
     embed_p2_type = layers.Embedding(input_dim=encoders['p2_move_details.type']['vocab_size'], output_dim=hp_embed_dim_type, mask_zero=False)(p2_type_in)
+    embed_p1_category = layers.Embedding(input_dim=encoders['p1_move_details.category']['vocab_size'], output_dim=hp_embed_dim_category, mask_zero=False)(p1_category_in)
+    embed_p2_category = layers.Embedding(input_dim=encoders['p2_move_details.category']['vocab_size'], output_dim=hp_embed_dim_category, mask_zero=False)(p2_category_in)
 
-    # Concatena TUTTI gli embedding
     concatenated_embeddings = layers.Concatenate()([
         embed_p1_name, embed_p2_name,
         embed_p1_move, embed_p2_move,
-        embed_p1_type, embed_p2_type # NUOVI
+        embed_p1_type, embed_p2_type,
+        embed_p1_category, embed_p2_category 
     ])
 
     lstm_categorical_out = layers.LSTM(hp_lstm_units_cat, return_sequences=False)(concatenated_embeddings)
     branches_to_concat.append(lstm_categorical_out)
+    
+    # --- NUOVO: Ramo 3: Dati Statici (Opzionale) ---
+    if STATIC_FEATURES_EXIST:
+        input_static = layers.Input(shape=(NUM_STATIC_FEATURES,), name='input_static')
+        model_inputs.append(input_static)
+        
+        static_branch = layers.Dense(hp_static_dense_units, activation='relu')(input_static)
+        static_branch = layers.Dropout(hp_static_dropout)(static_branch)
+        branches_to_concat.append(static_branch)
+    # ------------------------------------------------
 
-    # --- Fine: Unione dei Rami ---
-    concatenated_features = layers.Concatenate()(branches_to_concat)
+    # --- Fine: Unione dei Rami (2 o 3) ---
+    # Concatena solo se c'è più di un ramo (anche se con l'ibrido ce ne saranno sempre almeno 2)
+    if len(branches_to_concat) > 1:
+        concatenated_features = layers.Concatenate()(branches_to_concat)
+    else:
+        concatenated_features = branches_to_concat[0] # Fallback (non dovrebbe succedere)
 
     # --- Testa del Modello ---
     x = layers.Dense(hp_dense_units, activation='relu')(concatenated_features)
@@ -162,18 +228,21 @@ history = None
 
 # --- 4. ESEGUI O SALTA TUNING ---
 if RUN_KERAS_TUNER:
-    print("\n[MODALITÀ TUNING ATTIVA]")
-    print("Avvio Ottimizzazione (SUPER-AVANZATA) con KerasTuner (BayesianOptimization)...")
+    print(f"\n[MODALITÀ TUNING ATTIVA (v5 - Ibrido: {STATIC_FEATURES_EXIST})]")
+    print("Avvio Ottimizzazione (SUPER-AVANZATA v5) con KerasTuner (BayesianOptimization)...")
     tuner = kt.BayesianOptimization(
         build_model, objective=kt.Objective("val_auc", direction="max"),
-        max_trials=30, # Aumentiamo leggermente i tentativi
+        max_trials=50, # 50 tentativi
         executions_per_trial=1, directory=MODEL_PARAMS_DIR,
-        project_name='Pokemon_BayesianOpt_SuperAdv', # Nuovo nome progetto
+        project_name='Pokemon_BayesianOpt_SuperAdv_v5_Hybrid', # Nuovo nome progetto
         overwrite=True
     )
-    stop_early_tuner = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=8) # Pazienza leggermente aumentata
+    stop_early_tuner = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=12) 
+    
+    # La chiamata a search usa X_train_inputs, che è già configurato
+    # per 2 o 3 input
     tuner.search(
-        X_train_inputs, y_train, epochs=120, # Max epoche leggermente aumentate
+        X_train_inputs, y_train, epochs=120, 
         validation_data=(X_val_inputs, y_val),
         callbacks=[stop_early_tuner], batch_size=64
     )
@@ -181,15 +250,16 @@ if RUN_KERAS_TUNER:
     try:
         best_hps = tuner.get_best_hyperparameters(num_trials=1)[0]
         best_hps_values = best_hps.values
-        print("\nIperparametri Ottimali Trovati (Super-Avanzati):")
+        print("\nIperparametri Ottimali Trovati (Super-Avanzati v5):")
         print(pprint.pformat(best_hps_values, indent=2))
     except Exception as e: print(f"❌ ERRORE iperparametri: {e}"); exit()
 
     print("\nAddestramento modello migliore (dopo tuning)...")
     best_model = tuner.hypermodel.build(best_hps)
-    final_early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=12, restore_best_weights=True) # Pazienza aumentata
+    
+    final_early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=12, restore_best_weights=True) 
     history = best_model.fit(
-        X_train_inputs, y_train, epochs=200, # Max epoche aumentate
+        X_train_inputs, y_train, epochs=200, 
         validation_data=(X_val_inputs, y_val),
         callbacks=[final_early_stopping], batch_size=64, verbose=1
     )
@@ -206,7 +276,11 @@ if RUN_KERAS_TUNER:
 
 else: # --- SALTA TUNING ---
     print("\n[MODALITÀ CARICAMENTO ATTIVA (Tuning Saltato)]")
-    # ... (Blocco else invariato, carica PARAMS_FILE e MODEL_FILE) ...
+    # Nota: Il caricamento ora richiede che il modello venga costruito
+    # PRIMA di caricare i pesi, se il modello salvato non è ibrido
+    # e noi siamo in modalità ibrida.
+    # Per ora, assumiamo che il modello salvato corrisponda
+    # alla modalità ibrida attuale.
     print(f"Caricamento parametri da: {PARAMS_FILE}")
     try:
         with open(PARAMS_FILE, 'r') as f: best_hps_loaded = json.load(f)
@@ -218,9 +292,15 @@ else: # --- SALTA TUNING ---
     except Exception as e: print(f"❌ ERRORE parametri: {e}"); exit()
     print(f"Caricamento modello da: {MODEL_FILE}")
     try:
-        best_model = keras.models.load_model(MODEL_FILE, safe_mode=False) # Necessario per Lambda
+        # Se STATIC_FEATURES_EXIST è True, il modello salvato DEVE essere ibrido.
+        # Se è False, DEVE essere non ibrido.
+        best_model = keras.models.load_model(MODEL_FILE, safe_mode=False) 
         print("Modello caricato.")
-    except Exception as e: print(f"❌ ERRORE caricamento modello: {e}"); exit()
+    except Exception as e: 
+        print(f"❌ ERRORE caricamento modello: {e}")
+        print("Questo può accadere se provi a caricare un modello non-ibrido in modalità ibrida (o viceversa).")
+        print("Prova a ricostruire il modello dai parametri e caricare solo i pesi se necessario.")
+        exit()
     history = None
 
 
@@ -228,6 +308,8 @@ else: # --- SALTA TUNING ---
 if best_model is None: print("❌ ERRORE: Modello non disponibile."); exit()
 
 print("\nCalcolo predizioni su Train (60%) e Validation (20%)...")
+# Le chiamate predict usano i dizionari X_train_inputs/X_val_inputs,
+# che sono già pronti per 2 o 3 input.
 y_pred_proba_train = best_model.predict(X_train_inputs)
 y_pred_train = (y_pred_proba_train > 0.5).astype(int)
 train_accuracy = accuracy_score(y_train, y_pred_train)
@@ -246,7 +328,7 @@ print(f"  Accuracy (Validation 20%): {val_accuracy:.4f}")
 print(f"  AUC (Validation 20%):      {val_auc:.4f}")
 overfitting_diff = train_accuracy - val_accuracy; overfitting_perc = overfitting_diff * 100
 overfitting_msg = f"\033[92m  OK: No overfitting evidente. (Delta: {overfitting_perc:.2f}%)\033[0m"
-if overfitting_diff > 0.07: # Soglia leggermente aumentata a 7%
+if overfitting_diff > 0.07: # Soglia 7%
     overfitting_msg = f"\033[93m  WARNING: Possibile Overfitting! (Delta: {overfitting_perc:.2f}%)\033[0m"
 print(overfitting_msg)
 print("---------------------------------------------")
@@ -260,7 +342,7 @@ print(f"\nSalvataggio riepilogo in: {SUMMARY_FILE}...")
 try:
     with open(SUMMARY_FILE, 'w', encoding='utf-8') as f:
         f.write("="*60 + "\n")
-        f.write(" RIEPILOGO TRAINING MODELLO LSTM (SUPER-AVANZATO) \n")
+        f.write(f" RIEPILOGO TRAINING MODELLO LSTM (v5 - Ibrido: {STATIC_FEATURES_EXIST}) \n")
         f.write("="*60 + "\n\n")
         f.write(f"Timestamp: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"Modalità Esecuzione: {'TUNING + TRAINING' if RUN_KERAS_TUNER else 'CARICAMENTO MODELLO'}\n\n")
@@ -295,6 +377,6 @@ try:
     print("File di riepilogo creato.")
 except Exception as e: print(f"❌ ERRORE riepilogo: {e}")
 
-print(f"\n--- Completato (Super-Avanzato, {'Tuning Eseguito' if RUN_KERAS_TUNER else 'Modello Caricato'}) ---")
+print(f"\n--- Completato (Super-Avanzato v5-tuning, {'Tuning Eseguito' if RUN_KERAS_TUNER else 'Modello Caricato'}) ---")
 print(f"Modello/parametri in {MODEL_PARAMS_DIR}")
 print(f"Riepilogo in {ANALYSIS_DIR}")

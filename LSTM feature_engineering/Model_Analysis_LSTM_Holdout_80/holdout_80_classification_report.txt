@@ -1,0 +1,12 @@
+Final Classification Report (Train 80% for 13 epochs, Test Holdout 20%):
+
+Modalità Ibrida: True
+
+              precision    recall  f1-score   support
+
+   False (0)     0.8349    0.8240    0.8294      1000
+    True (1)     0.8263    0.8370    0.8316      1000
+
+    accuracy                         0.8305      2000
+   macro avg     0.8306    0.8305    0.8305      2000
+weighted avg     0.8306    0.8305    0.8305      2000

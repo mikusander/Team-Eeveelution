@@ -1,20 +1,19 @@
 """
-Script IBRIDO per LSTM (v5):
-1. Addestra il modello (potenzialmente ibrido) sull'80% dei dati.
-2. Stampa l'accuracy sul 20% Holdout.
-3. Genera le predizioni per Kaggle e crea il file submission.
-(Versione SUPER-AVANZATA v2 con 8 input categorici + statici opzionali)
+MODIFICATO (v5 - Ibrido):
+Addestra il modello finale LSTM Avanzato (potenzialmente ibrido)
+sul 100% DEI DATI (Train+Val+Holdout)
+usando gli iperparametri ottimali per epoche ottimali (lette da JSON) e crea la submission.
+
+MODIFICA FINALE: Salva le PROBABILITA' (float) invece di 0/1 per il blending.
 """
 
 import numpy as np
 import pandas as pd
 import os
 import json
-# import mlflow -> RIMOSSO
-import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
-from sklearn.metrics import accuracy_score
+import tensorflow as tf
 
 # --- Set Random Seeds ---
 SEED = 42
@@ -23,40 +22,40 @@ tf.random.set_seed(SEED)
 # ------------------------
 
 # --- 1. Configurazione ---
-SPLIT_DIR = 'Preprocessed_LSTM_Splits'
 LSTM_DATA_DIR = 'Preprocessed_LSTM'
-HYBRID_DATA_DIR = 'Preprocessed_LSTM_Hybrid' # NUOVO: Path per statiche di test
-ENCODERS_FILE = os.path.join('Preprocessed_LSTM', 'encoders.json')
+HYBRID_DATA_DIR = 'Preprocessed_LSTM_Hybrid' 
+SPLIT_DIR = 'Preprocessed_LSTM_Splits'
 MODEL_PARAMS_DIR = 'Model_Params_LSTM_Advanced'
 SUBMISSION_DIR = 'Submissions'
+ENCODERS_FILE = os.path.join('Preprocessed_LSTM', 'encoders.json')
 os.makedirs(SUBMISSION_DIR, exist_ok=True)
 
-# File di Input (Train 80%)
-X_TRAIN_NUM_FILE = os.path.join(SPLIT_DIR, 'train_60_num.npy')
-X_TRAIN_CAT_FILE = os.path.join(SPLIT_DIR, 'train_60_cat.npy')
-X_TRAIN_STATIC_FILE = os.path.join(SPLIT_DIR, 'train_60_static.npy') # NUOVO
-Y_TRAIN_FILE = os.path.join(SPLIT_DIR, 'train_60_y.npy')
-X_VAL_NUM_FILE = os.path.join(SPLIT_DIR, 'val_20_num.npy')
-X_VAL_CAT_FILE = os.path.join(SPLIT_DIR, 'val_20_cat.npy')
-X_VAL_STATIC_FILE = os.path.join(SPLIT_DIR, 'val_20_static.npy') # NUOVO
-Y_VAL_FILE = os.path.join(SPLIT_DIR, 'val_20_y.npy')
-
-# File di Input (Holdout 20%)
-X_HOLDOUT_NUM_FILE = os.path.join(SPLIT_DIR, 'holdout_20_num.npy')
-X_HOLDOUT_CAT_FILE = os.path.join(SPLIT_DIR, 'holdout_20_cat.npy')
-X_HOLDOUT_STATIC_FILE = os.path.join(SPLIT_DIR, 'holdout_20_static.npy') # NUOVO
-Y_HOLDOUT_FILE = os.path.join(SPLIT_DIR, 'holdout_20_y.npy')
-
-# File di Input (Test Kaggle)
+# --- File di Input ---
+# Dati di Test (per la predizione finale)
 TEST_NUMERIC_IN = os.path.join(LSTM_DATA_DIR, 'test_numeric_seq.npy')
 TEST_CATEGORICAL_IN = os.path.join(LSTM_DATA_DIR, 'test_categorical_seq.npy')
-TEST_STATIC_IN = os.path.join(HYBRID_DATA_DIR, 'test_static_features.npy') # NUOVO
-TIMELINE_TEST_IN = os.path.join('Output_CSVs', 'timelines_test_dynamic.csv')
+TEST_STATIC_IN = os.path.join(HYBRID_DATA_DIR, 'test_static_features.npy') 
 
-PARAMS_FILE = os.path.join(MODEL_PARAMS_DIR, 'best_lstm_params_advanced.json') # Contiene epoca ottimale
+# Dati di Training (100%)
+TRAIN_NUM_IN = os.path.join(SPLIT_DIR, 'train_60_num.npy')
+TRAIN_CAT_IN = os.path.join(SPLIT_DIR, 'train_60_cat.npy')
+TRAIN_STATIC_IN = os.path.join(SPLIT_DIR, 'train_60_static.npy') 
+TRAIN_Y_IN = os.path.join(SPLIT_DIR, 'train_60_y.npy')
 
-# File di Output
-SUBMISSION_FILE_OUT = os.path.join(SUBMISSION_DIR, 'submission_lstm_advanced_80pct.csv')
+VAL_NUM_IN = os.path.join(SPLIT_DIR, 'val_20_num.npy')
+VAL_CAT_IN = os.path.join(SPLIT_DIR, 'val_20_cat.npy')
+VAL_STATIC_IN = os.path.join(SPLIT_DIR, 'val_20_static.npy') 
+VAL_Y_IN = os.path.join(SPLIT_DIR, 'val_20_y.npy')
+
+HOLD_NUM_IN = os.path.join(SPLIT_DIR, 'holdout_20_num.npy')
+HOLD_CAT_IN = os.path.join(SPLIT_DIR, 'holdout_20_cat.npy')
+HOLD_STATIC_IN = os.path.join(SPLIT_DIR, 'holdout_20_static.npy') 
+HOLD_Y_IN = os.path.join(SPLIT_DIR, 'holdout_20_y.npy')
+
+PARAMS_FILE = os.path.join(MODEL_PARAMS_DIR, 'best_lstm_params_advanced.json') 
+
+# MODIFICA: Nuovo nome file di output
+SUBMISSION_FILE_OUT = os.path.join(SUBMISSION_DIR, 'submission_lstm_100pct_PROBA.csv')
 
 MAX_TURNS = 30
 
@@ -76,25 +75,24 @@ except Exception as e:
 
 # Determina dimensioni input
 try:
-    _temp_train_num = np.load(X_TRAIN_NUM_FILE)
-    _temp_train_cat = np.load(X_TRAIN_CAT_FILE)
+    _temp_train_num = np.load(TRAIN_NUM_IN)
+    _temp_train_cat = np.load(TRAIN_CAT_IN)
     NUM_NUMERIC_FEATURES = _temp_train_num.shape[2]
     NUM_CATEGORICAL_FEATURES = _temp_train_cat.shape[2] # Dovrebbe essere 8
     del _temp_train_num, _temp_train_cat
     print(f"Rilevate {NUM_NUMERIC_FEATURES} feature numeriche, {NUM_CATEGORICAL_FEATURES} categoriche.")
     if NUM_CATEGORICAL_FEATURES != 8:
         print(f"⚠️ ATTENZIONE: Rilevate {NUM_CATEGORICAL_FEATURES} feat. categoriche, ma 8 attese. Verifica '05_...py'.")
-
-    # Controlla statiche (sia train che test per sicurezza)
-    STATIC_FEATURES_EXIST = os.path.exists(X_TRAIN_STATIC_FILE) and os.path.exists(TEST_STATIC_IN)
+        
+    STATIC_FEATURES_EXIST = os.path.exists(TRAIN_STATIC_IN) and os.path.exists(TEST_STATIC_IN)
     if STATIC_FEATURES_EXIST:
-        _temp_static = np.load(X_TRAIN_STATIC_FILE)
+        _temp_static = np.load(TRAIN_STATIC_IN)
         NUM_STATIC_FEATURES = _temp_static.shape[1]
         del _temp_static
         print(f"Rilevate {NUM_STATIC_FEATURES} feature statiche. Modalità Ibrida ATTIVA.")
     else:
         print("Feature statiche non trovate. Modalità Ibrida DISATTIVATA.")
-        
+
 except Exception as e:
      print(f"❌ ERRORE: Impossibile determinare dimensioni input dai file .npy: {e}")
      exit()
@@ -145,7 +143,6 @@ def build_model(hp_dict):
     
     # --- NUOVO: Ramo 3: Dati Statici (Opzionale) ---
     if STATIC_FEATURES_EXIST:
-        # Usa .get() per default sicuri se il JSON non è ibrido
         static_dense = hp_dict.get('static_dense_units', 64)
         static_dropout = hp_dict.get('static_dropout', 0.3)
         
@@ -157,13 +154,11 @@ def build_model(hp_dict):
         branches_to_concat.append(static_branch)
     # ------------------------------------------------
     
-    # --- Fine: Unione dei Rami ---
     if len(branches_to_concat) > 1:
         concatenated_features = layers.Concatenate()(branches_to_concat)
     else:
         concatenated_features = branches_to_concat[0]
     
-    # --- Testa del Modello ---
     x = layers.Dense(hp_dict['dense_units'], activation='relu')(concatenated_features)
     x = layers.Dropout(hp_dict['dropout'])(x)
     output = layers.Dense(1, activation='sigmoid')(x)
@@ -172,118 +167,96 @@ def build_model(hp_dict):
     model.compile(optimizer=keras.optimizers.Adam(learning_rate=hp_dict['learning_rate']), loss='binary_crossentropy', metrics=['accuracy', tf.keras.metrics.AUC(name='auc')])
     return model
 
-# --- 3. Carica Dati (80% Train, 20% Holdout) e Parametri ---
-print("Caricamento dati (Train 60%, Val 20%, Holdout 20%)...")
+# --- 3. Carica il 100% dei Dati di Training ---
+print("Caricamento 100% dati di training (Train+Val+Holdout)...")
 try:
-    X_train_num = np.load(X_TRAIN_NUM_FILE)
-    X_train_cat = np.load(X_TRAIN_CAT_FILE).astype(np.int32)
-    y_train = np.load(Y_TRAIN_FILE)
-    X_val_num = np.load(X_VAL_NUM_FILE)
-    X_val_cat = np.load(X_VAL_CAT_FILE).astype(np.int32)
-    y_val = np.load(Y_VAL_FILE)
+    X_train_num_100 = np.concatenate([ np.load(TRAIN_NUM_IN), np.load(VAL_NUM_IN), np.load(HOLD_NUM_IN) ])
+    X_train_cat_100 = np.concatenate([ np.load(TRAIN_CAT_IN).astype(np.int32), np.load(VAL_CAT_IN).astype(np.int32), np.load(HOLD_CAT_IN).astype(np.int32) ])
+    y_train_100 = np.concatenate([ np.load(TRAIN_Y_IN), np.load(VAL_Y_IN), np.load(HOLD_Y_IN) ])
     
-    X_holdout_num = np.load(X_HOLDOUT_NUM_FILE)
-    X_holdout_cat = np.load(X_HOLDOUT_CAT_FILE).astype(np.int32)
-    y_holdout = np.load(Y_HOLDOUT_FILE)
-    X_holdout_inputs = {'input_numeric': X_holdout_num, 'input_categorical': X_holdout_cat}
+    X_train_100_inputs = { 'input_numeric': X_train_num_100, 'input_categorical': X_train_cat_100 }
 
-    # --- NUOVO: Carica statiche se esistono ---
-    X_train_80_static = None
     if STATIC_FEATURES_EXIST:
-        print("Caricamento dati statici per Train, Val e Holdout...")
-        X_train_static = np.load(X_TRAIN_STATIC_FILE)
-        X_val_static = np.load(X_VAL_STATIC_FILE)
-        X_holdout_static = np.load(X_HOLDOUT_STATIC_FILE)
-        
-        X_train_80_static = np.concatenate([X_train_static, X_val_static])
-        X_holdout_inputs['input_static'] = X_holdout_static
-    # -----------------------------------------
+        print("Caricamento e concatenazione dati statici (100%)...")
+        X_train_100_static = np.concatenate([
+            np.load(TRAIN_STATIC_IN),
+            np.load(VAL_STATIC_IN),
+            np.load(HOLD_STATIC_IN)
+        ])
+        X_train_100_inputs['input_static'] = X_train_100_static
+    
+except Exception as e:
+    print(f"❌ ERRORE: Impossibile caricare tutti i dati di training: {e}")
+    exit()
 
+print(f"Dati di training totali caricati: {len(y_train_100)} campioni.")
+
+# --- 4. Costruisci e Addestra il Modello Finale ---
+print(f"Caricamento iperparametri da {PARAMS_FILE}...")
+try:
     with open(PARAMS_FILE, 'r') as f:
         best_hps_dict = json.load(f)
     OPTIMAL_EPOCHS = best_hps_dict.get('optimal_epoch', None)
     if OPTIMAL_EPOCHS is None:
         raise ValueError("'optimal_epoch' non trovato nel file JSON dei parametri.")
-    print(f"Parametri caricati da {PARAMS_FILE}. Epoca ottimale: {OPTIMAL_EPOCHS}")
-
+    print(f"Parametri caricati. Epoca ottimale: {OPTIMAL_EPOCHS}")
 except Exception as e:
-    print(f"❌ ERRORE: Impossibile caricare dati o parametri: {e}")
+    print(f"❌ ERRORE: Impossibile caricare il file dei parametri: {e}")
+    print("Assicurati di aver eseguito '07_optimize_and_validate_ADVANCED.py'.")
     exit()
 
-# Unisci Train e Val
-print("\nUnione Train (60%) e Validation (20%) nel set 80%...")
-X_train_80_num = np.concatenate([X_train_num, X_val_num])
-X_train_80_cat = np.concatenate([X_train_cat, X_val_cat])
-y_train_80 = np.concatenate([y_train, y_val])
-X_train_80_inputs = {'input_numeric': X_train_80_num, 'input_categorical': X_train_80_cat}
-
-if STATIC_FEATURES_EXIST:
-    X_train_80_inputs['input_static'] = X_train_80_static
-
-print(f"Dimensione set addestramento 80%: {len(y_train_80)} campioni.")
-
-# --- 4. Addestra Modello su 80% ---
-print(f"\nCostruzione e Addestramento modello su 80% per {OPTIMAL_EPOCHS} epoche...")
+print("Costruzione modello finale...")
 final_model = build_model(best_hps_dict)
+
+print(f"Addestramento modello finale su 100% dei dati per {OPTIMAL_EPOCHS} epoche...")
 final_model.fit(
-    X_train_80_inputs,
-    y_train_80,
+    X_train_100_inputs,
+    y_train_100,
     epochs=OPTIMAL_EPOCHS, 
     batch_size=64,
     verbose=1
 )
-print("Addestramento completato.")
+print("Addestramento finale completato.")
 
-# --- 5. Validazione Locale (Rapida) su Holdout ---
-print("\n--- Validazione Locale (su 20% Holdout) ---")
-y_pred_holdout = (final_model.predict(X_holdout_inputs) > 0.5).astype(int)
-holdout_accuracy = accuracy_score(y_holdout, y_pred_holdout)
-print(f"  Accuracy LSTM su 20% Holdout: {holdout_accuracy:.4f} (Ibrido: {STATIC_FEATURES_EXIST})")
-print("---------------------------------------------")
-
-# --- 6. Genera Submission per Kaggle ---
-print("\nCaricamento dati di Test Kaggle...")
+# --- 5. Carica Dati di Test e Genera Predizioni ---
+print("Caricamento dati di Test Kaggle...")
 try:
     X_test_num = np.load(TEST_NUMERIC_IN)
-    X_test_cat = np.load(TEST_CATEGORICAL_IN).astype(np.int32) # Assicura int32
-    X_test_inputs = {'input_numeric': X_test_num, 'input_categorical': X_test_cat}
-    
+    X_test_cat = np.load(TEST_CATEGORICAL_IN).astype(np.int32) 
+    X_test_inputs = { 'input_numeric': X_test_num, 'input_categorical': X_test_cat }
+
     if STATIC_FEATURES_EXIST:
         print("Caricamento dati statici di Test Kaggle...")
         X_test_static = np.load(TEST_STATIC_IN)
         X_test_inputs['input_static'] = X_test_static
-        
+
 except Exception as e:
-    print(f"❌ ERRORE: Impossibile caricare i dati di test: {e}")
+    print(f"❌ ERRORE: Impossibile caricare i dati di test Kaggle: {e}")
     exit()
 
 print(f"Generazione predizioni Kaggle per {len(X_test_num)} campioni...")
-y_pred_proba_kaggle = final_model.predict(X_test_inputs)
-y_pred_kaggle = (y_pred_proba_kaggle > 0.5).astype(int).flatten()
+# MODIFICA: Salva le probabilità (float) e appiattiscile
+y_pred_proba = final_model.predict(X_test_inputs).flatten() 
+# y_pred = (y_pred_proba > 0.5).astype(int).flatten() # NON PIU' NECESSARIO QUI
 
+# --- 6. Crea il File di Submission (con PROBABILITA') ---
 print("Caricamento battle_id per la submission...")
 try:
-    # MODIFICA: Carica ID da file .npy per coerenza (salvato da 05)
     test_ids = np.load(os.path.join(LSTM_DATA_DIR, 'test_ids.npy'), allow_pickle=True)
-    if len(test_ids) != len(y_pred_kaggle):
-        # Fallback su CSV se il .npy non è allineato (non dovrebbe succedere)
-        print(f"⚠️ Warning: Mismatch ID .npy ({len(test_ids)}) vs Preds ({len(y_pred_kaggle)}). Tento fallback su CSV...")
-        test_df = pd.read_csv(TIMELINE_TEST_IN)
-        test_ids = test_df['battle_id'].unique()
-        
 except Exception as e:
-    print(f"❌ ERRORE: Impossibile caricare battle_ids: {e}")
+    print(f"❌ ERRORE: Impossibile caricare battle_ids da .npy: {e}")
     exit()
 
-if len(test_ids) != len(y_pred_kaggle):
-    print(f"❌ ERRORE: Mismatch ID ({len(test_ids)}) vs Predizioni ({len(y_pred_kaggle)})")
+if len(test_ids) != len(y_pred_proba):
+    print(f"❌ ERRORE: Mismatch tra ID ({len(test_ids)}) e Predizioni ({len(y_pred_proba)})")
     exit()
 
-submission_df = pd.DataFrame({'battle_id': test_ids, 'player_won': y_pred_kaggle})
+# MODIFICA: Salva le 'player_won_proba'
+submission_df = pd.DataFrame({ 'battle_id': test_ids, 'player_won_proba': y_pred_proba })
 submission_df.to_csv(SUBMISSION_FILE_OUT, index=False)
 
-print(f"\n--- SUBMISSION LSTM (80% TRAIN, Ibrido: {STATIC_FEATURES_EXIST}) PRONTA ---")
+print(f"\n--- SUBMISSION LSTM (100% TRAIN, PROBABILITA') PRONTA ---")
 print(f"File salvato in: {SUBMISSION_FILE_OUT}")
 print(submission_df.head())
 
-print(f"\n--- Script 10 (LSTM Submission 80% v5 Ibrido) Completato ---")
+print(f"\n--- Script 11 (LSTM Submission 100% v5 Ibrido) Completato ---")

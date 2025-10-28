@@ -4,6 +4,13 @@ Prepara i dati per un modello sequenziale (LSTM) - VERSIONE SUPER-AVANZATA.
 Aggiunge numerose feature sequenziali: tipo mossa, efficacia, status,
 flags mosse, turno, stats attive, delta relativi, flag switch.
 SALVA ANCHE GLI ID delle battaglie nell'ordine corretto.
+
+MODIFICATO (v3):
+- Aggiunti tutti i 5 boosts (atk, def, spa, spd, spe)
+- Aggiunte 5 statistiche base attive (atk, def, spa, spd, spe)
+- RIMOSSA 'basePower' (non presente nei dati di origine)
+- Aggiunta 'category' della mossa (categorica)
+- Aggiunti 'delta' relativi per tutte le 5 statistiche base
 """
 
 import pandas as pd
@@ -16,7 +23,7 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 
-print("Avvio Preprocessing LSTM (SUPER-AVANZATO)...")
+print("Avvio Preprocessing LSTM (SUPER-AVANZATO v3)...")
 
 # --- 1. Configurazione ---
 CSV_DIR = 'Output_CSVs'
@@ -56,7 +63,7 @@ try:
     print(f"Caricati {len(NEGATIVE_STATUSES)} status negativi.")
 except ImportError: print("❌ ERRORE: File 'unique_statuses.py' non trovato."); exit()
 
-# Costanti Tipi
+# Costanti Tipi (Concesso dall'utente)
 TYPE_EFFECTIVENESS = {
     'normal': {'rock': 0.5, 'ghost': 0.0}, 'fire': {'fire': 0.5, 'water': 0.5, 'grass': 2.0, 'ice': 2.0, 'bug': 2.0, 'rock': 0.5, 'dragon': 0.5},
     'water': {'fire': 2.0, 'water': 0.5, 'grass': 0.5, 'ground': 2.0, 'rock': 2.0, 'dragon': 0.5}, 'electric': {'water': 2.0, 'electric': 0.5, 'grass': 0.5, 'ground': 0.0, 'flying': 2.0, 'dragon': 0.5},
@@ -68,22 +75,27 @@ TYPE_EFFECTIVENESS = {
     'dragon': {'dragon': 2.0}, 'notype': {}, 'none': {}
 }
 
-# --- 2. Definizione Feature (SUPER-AVANZATA) ---
-# Manteniamo le base + aggiunte
+# --- 2. Definizione Feature (SUPER-AVANZATA v3) ---
+
+# Aggiunti tutti i 5 boost
 BASE_NUMERIC_FEATURES = [
     'p1_pokemon_state.hp_pct', 'p2_pokemon_state.hp_pct',
-    'p1_pokemon_state.boosts.atk', 'p1_pokemon_state.boosts.def', 'p1_pokemon_state.boosts.spe',
-    'p2_pokemon_state.boosts.atk', 'p2_pokemon_state.boosts.def', 'p2_pokemon_state.boosts.spe',
+    'p1_pokemon_state.boosts.atk', 'p1_pokemon_state.boosts.def', 'p1_pokemon_state.boosts.spa', 'p1_pokemon_state.boosts.spd', 'p1_pokemon_state.boosts.spe',
+    'p2_pokemon_state.boosts.atk', 'p2_pokemon_state.boosts.def', 'p2_pokemon_state.boosts.spa', 'p2_pokemon_state.boosts.spd', 'p2_pokemon_state.boosts.spe',
 ]
+# Aggiunte stats attive, delta stats (RIMOSSO basePower)
 NEW_NUMERIC_FEATURES = [
-    'turn_norm', # Turno normalizzato
+    'turn_norm', 
     'p1_move_effectiveness', 'p2_move_effectiveness',
+    # 'p1_move_details.basePower', 'p2_move_details.basePower', # RIMOSSO - Causa KeyError
     'p1_has_negative_status', 'p2_has_negative_status',
     'p1_is_stab', 'p2_is_stab',
     'p1_is_status_move', 'p2_is_status_move',
     'p1_is_healing_move', 'p2_is_healing_move',
-    'p1_active_base_spe', 'p2_active_base_spe', # Stats Pokémon attivo
+    'p1_active_base_atk', 'p1_active_base_def', 'p1_active_base_spa', 'p1_active_base_spd', 'p1_active_base_spe', # NUOVO (5 stats)
+    'p2_active_base_atk', 'p2_active_base_def', 'p2_active_base_spa', 'p2_active_base_spd', 'p2_active_base_spe', # NUOVO (5 stats)
     'relative_hp_delta', 'relative_boost_delta',
+    'relative_atk_delta', 'relative_def_delta', 'relative_spa_delta', 'relative_spd_delta', 'relative_spe_delta', # NUOVO (5 delta)
     'p1_switched', 'p2_switched'
 ]
 NUMERIC_FEATURES = BASE_NUMERIC_FEATURES + NEW_NUMERIC_FEATURES
@@ -92,8 +104,10 @@ BASE_CATEGORICAL_FEATURES = [
     'p1_pokemon_state.name', 'p2_pokemon_state.name',
     'p1_move_details.name', 'p2_move_details.name',
 ]
+# Aggiunta categoria mossa (MANTENUTO)
 NEW_CATEGORICAL_FEATURES = [
-    'p1_move_details.type', 'p2_move_details.type'
+    'p1_move_details.type', 'p2_move_details.type',
+    'p1_move_details.category', 'p2_move_details.category' # NUOVO (Totale 8 features cat)
 ]
 CATEGORICAL_FEATURES = BASE_CATEGORICAL_FEATURES + NEW_CATEGORICAL_FEATURES
 
@@ -165,9 +179,9 @@ def get_effectiveness(move_type, target_types):
             valid_target_types_found = True
     return multiplier if valid_target_types_found else 1.0
 
-# --- 4. Funzione di Processing Principale (SUPER-AVANZATA) ---
+# --- 4. Funzione di Processing Principale (SUPER-AVANZATA v3) ---
 def process_timelines_advanced(filepath, pokedex_stats, is_train=True, encoders=None):
-    print(f"Caricamento e Processing Avanzato {filepath}...")
+    print(f"Caricamento e Processing Avanzato v3 {filepath}...")
     try:
         df = pd.read_csv(filepath)
     except FileNotFoundError: return None, None, None, None
@@ -176,22 +190,27 @@ def process_timelines_advanced(filepath, pokedex_stats, is_train=True, encoders=
     df = df.sort_values(by=['battle_id', 'turn']).reset_index(drop=True)
 
     # --- Calcolo Feature Turno-per-Turno ---
-    print("Calcolo feature sequenziali avanzate...")
+    print("Calcolo feature sequenziali avanzate v3...")
 
-    # Aggiungi tipi attivi e stats attive
+    # Aggiungi tipi attivi e STATS attive
     df['p1_active_data'] = df['p1_pokemon_state.name'].fillna('none').apply(lambda x: pokedex_stats.get(x, pokedex_stats['none']))
     df['p2_active_data'] = df['p2_pokemon_state.name'].fillna('none').apply(lambda x: pokedex_stats.get(x, pokedex_stats['none']))
     df['p1_active_types'] = df['p1_active_data'].apply(lambda x: x['types'])
     df['p2_active_types'] = df['p2_active_data'].apply(lambda x: x['types'])
-    df['p1_active_base_spe'] = df['p1_active_data'].apply(lambda x: x['stats']['spe'])
-    df['p2_active_base_spe'] = df['p2_active_data'].apply(lambda x: x['stats']['spe'])
-    # Puoi aggiungere altre stats qui se vuoi (es. 'atk', 'def')
+    # Estrai tutte le 5 stats (escluso hp)
+    for stat in ['atk', 'def', 'spa', 'spd', 'spe']:
+        df[f'p1_active_base_{stat}'] = df['p1_active_data'].apply(lambda x: x['stats'][stat])
+        df[f'p2_active_base_{stat}'] = df['p2_active_data'].apply(lambda x: x['stats'][stat])
 
-    # Pulisci nomi/tipi mosse
+    # Pulisci nomi/tipi/categorie mosse
     df['p1_move_name_str'] = df['p1_move_details.name'].fillna('none').astype(str).str.lower()
     df['p2_move_name_str'] = df['p2_move_details.name'].fillna('none').astype(str).str.lower()
-    df['p1_move_details.type'] = df['p1_move_details.type'].fillna('none').astype(str).str.lower() # Sovrascrive
-    df['p2_move_details.type'] = df['p2_move_details.type'].fillna('none').astype(str).str.lower() # Sovrascrive
+    df['p1_move_details.type'] = df['p1_move_details.type'].fillna('none').astype(str).str.lower() 
+    df['p2_move_details.type'] = df['p2_move_details.type'].fillna('none').astype(str).str.lower()
+    df['p1_move_details.category'] = df['p1_move_details.category'].fillna('none').astype(str).str.lower() # NUOVO
+    df['p2_move_details.category'] = df['p2_move_details.category'].fillna('none').astype(str).str.lower() # NUOVO
+    # df['p1_move_details.basePower'] = df['p1_move_details.basePower'].fillna(0.0) # RIMOSSO
+    # df['p2_move_details.basePower'] = df['p2_move_details.basePower'].fillna(0.0) # RIMOSSO
 
     # Calcola flag mosse
     df['p1_is_stab'] = df.apply(lambda r: 1 if (r['p1_move_details.type'] in r['p1_active_types'] and r['p1_move_details.type'] != 'none') else 0, axis=1)
@@ -213,18 +232,21 @@ def process_timelines_advanced(filepath, pokedex_stats, is_train=True, encoders=
 
     # Turno Normalizzato (usa transform per applicarlo per gruppo)
     df['turn_norm'] = df.groupby('battle_id')['turn'].transform(lambda x: x / x.max() if x.max() > 0 else 0)
-    # Alternativa: df['turn_norm'] = df['turn'] / MAX_TURNS # Se preferisci normalizzazione globale
 
-    # Delta Relativi HP e Boost
+    # Delta Relativi HP e Boost (ora con 5 stats)
     df['p1_pokemon_state.hp_pct'] = df['p1_pokemon_state.hp_pct'].fillna(0.0) # Gestisci NaN in HP
     df['p2_pokemon_state.hp_pct'] = df['p2_pokemon_state.hp_pct'].fillna(0.0)
     df['relative_hp_delta'] = df['p1_pokemon_state.hp_pct'] - df['p2_pokemon_state.hp_pct']
 
-    boost_cols_p1 = [f'p1_pokemon_state.boosts.{s}' for s in ['atk', 'def', 'spe']] # Assumiamo solo queste 3
-    boost_cols_p2 = [f'p2_pokemon_state.boosts.{s}' for s in ['atk', 'def', 'spe']]
+    boost_cols_p1 = [f'p1_pokemon_state.boosts.{s}' for s in ['atk', 'def', 'spa', 'spd', 'spe']] # AGGIORNATO
+    boost_cols_p2 = [f'p2_pokemon_state.boosts.{s}' for s in ['atk', 'def', 'spa', 'spd', 'spe']] # AGGIORNATO
     df['p1_boost_sum'] = df[boost_cols_p1].fillna(0).sum(axis=1)
     df['p2_boost_sum'] = df[boost_cols_p2].fillna(0).sum(axis=1)
     df['relative_boost_delta'] = df['p1_boost_sum'] - df['p2_boost_sum']
+    
+    # NUOVO: Delta Statistici Base Relativi
+    for stat in ['atk', 'def', 'spa', 'spd', 'spe']:
+        df[f'relative_{stat}_delta'] = df[f'p1_active_base_{stat}'] - df[f'p2_active_base_{stat}']
 
     # Flag Switch (verifica cambio nome rispetto al turno precedente nel gruppo)
     df['p1_prev_name'] = df.groupby('battle_id')['p1_pokemon_state.name'].shift(1).fillna('none')
@@ -242,16 +264,16 @@ def process_timelines_advanced(filepath, pokedex_stats, is_train=True, encoders=
     df = df.drop(columns=[col for col in cols_to_drop_before_encode if col in df.columns])
 
     # --- Aggiungi colonne mancanti (di nuovo, per sicurezza) e gestisci NaN Finali ---
-    all_numeric_needed = [col for col in NUMERIC_FEATURES if col not in BASE_NUMERIC_FEATURES] # Solo le nuove numeriche
-    for col in BASE_NUMERIC_FEATURES + all_numeric_needed + CATEGORICAL_FEATURES:
+    for col in NUMERIC_FEATURES + CATEGORICAL_FEATURES:
         if col not in df.columns:
             # Determina tipo in base alla lista
-            if col in BASE_NUMERIC_FEATURES + all_numeric_needed:
+            if col in NUMERIC_FEATURES:
                 df[col] = 0.0 # Default numerico
             else:
                 df[col] = 'none' # Default categorico
+    
     # Fillna finale per le numeriche
-    df[BASE_NUMERIC_FEATURES + all_numeric_needed] = df[BASE_NUMERIC_FEATURES + all_numeric_needed].fillna(0.0)
+    df[NUMERIC_FEATURES] = df[NUMERIC_FEATURES].fillna(0.0)
     # Fillna finale per le categoriche e cast a stringa
     df[CATEGORICAL_FEATURES] = df[CATEGORICAL_FEATURES].fillna('none').astype(str)
 
@@ -261,6 +283,11 @@ def process_timelines_advanced(filepath, pokedex_stats, is_train=True, encoders=
         encoders = {}
         for col in CATEGORICAL_FEATURES:
             le = LabelEncoder()
+            # Gestisci il caso in cui una colonna (es. category) non esista nei dati caricati
+            if col not in df.columns:
+                print(f"⚠️ ATTENZIONE: Colonna '{col}' non trovata. Creazione encoder fittizio.")
+                df[col] = 'none' # Crea colonna fittizia
+            
             unique_classes = pd.unique(df[col]) # Usa solo classi presenti
             le.fit(unique_classes)
             df[col] = le.transform(df[col]) + 1 # Shift +1 for padding=0
@@ -272,14 +299,10 @@ def process_timelines_advanced(filepath, pokedex_stats, is_train=True, encoders=
         for col in CATEGORICAL_FEATURES:
             if col not in encoders:
                  print(f"❌ ERRORE: Chiave '{col}' mancante negli encoders per Test.")
-                 # Prova ad aggiungere 'none' se manca per continuare
                  df[col] = 1 # Mappa tutto a 'none' (indice 1)
-                 continue # Vai alla colonna successiva
-                 # return None, None, None, None # Oppure esci
+                 continue 
             classes = encoders[col]['classes']
             mapping = {cls: i+1 for i, cls in enumerate(classes)}
-            # Mappa usando .get(), default a 1 ('none' o sconosciuto)
-            # Applica a stringa per sicurezza
             df[col] = df[col].astype(str).apply(lambda x: mapping.get(x, 1))
         print("Encoder applicato.")
 
@@ -380,9 +403,9 @@ try:
     print("Salvataggio completato.")
 except Exception as e: print(f"❌ ERRORE durante il salvataggio: {e}"); exit()
 
-print("\nPreprocessing LSTM (SUPER-AVANZATO) completato con successo.")
-print(f"Train Numeric Shape: {train_num_scaled.shape}")
-print(f"Train Categorical Shape: {train_cat_seq.shape}")
+print("\nPreprocessing LSTM (SUPER-AVANZATO v3) completato con successo.")
+print(f"Train Numeric Shape: {train_num_scaled.shape} (Features: {train_num_scaled.shape[2]})")
+print(f"Train Categorical Shape: {train_cat_seq.shape} (Features: {train_cat_seq.shape[2]})")
 print(f"Target Shape: {aligned_target.shape}")
 print(f"Train IDs Shape: {train_ids.shape}")
 print(f"Test Numeric Shape: {test_num_scaled.shape}")

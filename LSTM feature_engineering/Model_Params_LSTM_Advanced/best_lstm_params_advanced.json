@@ -1,11 +1,14 @@
 {
-    "lstm_units_num": 64,
+    "lstm_units_num": 96,
     "lstm_units_cat": 64,
-    "embed_dim_name": 20,
-    "embed_dim_move": 32,
+    "embed_dim_name": 10,
+    "embed_dim_move": 20,
     "embed_dim_type": 8,
-    "dense_units": 192,
-    "dropout": 0.4,
-    "learning_rate": 0.001,
-    "optimal_epoch": 5
+    "embed_dim_category": 16,
+    "dense_units": 384,
+    "dropout": 0.6,
+    "learning_rate": 0.0001,
+    "static_dense_units": 128,
+    "static_dropout": 0.1,
+    "optimal_epoch": 13
 }

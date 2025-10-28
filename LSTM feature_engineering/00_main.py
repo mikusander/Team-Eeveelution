@@ -4,7 +4,7 @@ import os
 import time
 
 
-RERUN_DATA_PREPROCESSING = True
+RERUN_DATA_PREPROCESSING = False
 
 data_scripts = [
     '01_counter.py',
@@ -12,7 +12,7 @@ data_scripts = [
     '03_process_status.py',
     '04_load_data.py',
     '05_lstm_preprocessing.py',
-    #'05b_static_features.py'
+    '05b_static_features.py'
 ]
 
 model_scripts = [
@@ -22,6 +22,9 @@ model_scripts = [
     '09_final_holdout_test_80.py',
     '10_create_submission_80.py',
     '11_create_submission_100.py',
+    '12_create_submission_ensemble.py',
+    '13_blender.py',
+    '14_compare_submissions.py'
 ]
 
 PREPROCESSED_DIR = 'Preprocessed_LSTM'
