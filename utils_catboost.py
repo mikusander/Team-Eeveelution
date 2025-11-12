@@ -1144,6 +1144,13 @@ def run_10_optimize_and_validate(run_grid_search=False):
 
     print("\nFase 5.2: Training su 60% e Diagnostica su 20% (Validation):\n")
 
+    if os.path.exists(ITERATION_OUTPUT_FILE):
+        print(f"Caricamento iterazioni esistenti da {ITERATION_OUTPUT_FILE}...")
+    with open(ITERATION_OUTPUT_FILE, 'r') as f:
+        data = json.load(f)
+        print("Contenuto del file:")
+        print(data)
+
     final_params_fit = best_params_clean.copy()
     final_params_fit.update({
         'n_estimators': 2000, 'early_stopping_rounds': 50,
