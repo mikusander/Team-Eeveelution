@@ -6,7 +6,6 @@ Questo modulo contiene tutte le funzioni necessarie per l'intera pipeline:
 - Funzioni helper per il parsing e il feature engineering
 - Funzioni di pipeline per ogni fase (00-11)
 
-Progettato per essere importato da script esecutori.
 """
 
 # --- 1. IMPORT CONSOLIDATI ---
@@ -38,8 +37,9 @@ import matplotlib.pyplot as plt
 BASE_DIR = Path(__file__).resolve().parent
 
 # Input (JSONL originali)
-TRAIN_JSONL_FILE = train_raw
-TEST_JSONL_FILE = test_raw
+INPUT_JSONL_DIR = BASE_DIR / 'Input'
+TRAIN_JSONL_FILE = INPUT_JSONL_DIR / 'train.jsonl'
+TEST_JSONL_FILE = INPUT_JSONL_DIR / 'test.jsonl'
 
 # Output FASE 0-4 (Tutti i dati processati)
 DATA_PIPELINE_DIR = BASE_DIR / 'CatBoost_Data_Pipeline'
@@ -124,7 +124,7 @@ def ensure_directories():
     """Crea tutte le cartelle di output necessarie se non esistono."""
     print("Verifica dell'esistenza delle cartelle di output...")
     dirs_to_create = [
-        DATA_PIPELINE_DIR, MODEL_OUTPUT_DIR,
+        INPUT_JSONL_DIR, DATA_PIPELINE_DIR, MODEL_OUTPUT_DIR,
         SUBMISSION_DIR, OOF_DIR
     ]
     for dir_path in dirs_to_create:
