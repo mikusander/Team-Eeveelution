@@ -33,6 +33,9 @@ import matplotlib.pyplot as plt
 
 # --- 2. CONFIGURAZIONE GLOBALE E PERCORSI ---
 
+# --- Flag di Esecuzione ---
+RUN_FEATURE_SELECTION = False
+
 # --- Struttura Cartelle Principale ---
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -904,8 +907,43 @@ def run_07_preprocessing():
     return True
 
 def run_08_feature_selection():
-    """FASE 3: Esegue RFECV per la selezione feature."""
-    print("\n--- Avvio 08_feature_selection (RFECV) ---")
+    """FASE 3: Esegue RFECV (se RUN_FEATURE_SELECTION=True) o carica i risultati (se False)."""
+    
+    # Legge la variabile globale definita nella Sezione 2
+    global RUN_FEATURE_SELECTION 
+    
+    if not RUN_FEATURE_SELECTION:
+        print("\n--- Avvio 08_feature_selection (Modalità: Caricamento) ---")
+        print("RUN_FEATURE_SELECTION è False. Salto RFECV.")
+        print("Verifico l'esistenza dei file delle feature selezionate...")
+        
+        # Controlla se i file che RFECV avrebbe dovuto creare esistono
+        required_files = [
+            TRAIN_PROCESSED_SELECTED_CSV,
+            TEST_PROCESSED_SELECTED_CSV,
+            SELECTED_FEATURES_FILE
+        ]
+        
+        all_files_found = True
+        for file_path in required_files:
+            if not os.path.exists(file_path):
+                print(f"\033[91mERRORE: File richiesto non trovato: {file_path}\033[0m")
+                all_files_found = False
+        
+        if all_files_found:
+            print("\033[92mSuccesso: Tutti i file delle feature selezionate sono presenti.\033[0m")
+            print(f"I dati verranno letti da: {TRAIN_PROCESSED_SELECTED_CSV.name}")
+            print("--- Completato 08_feature_selection (Caricamento) ---")
+            return True
+        else:
+            print("\nERRORE: Per saltare RFECV, i file '..._selected.csv' e '...names.txt' devono esistere.")
+            print(f"Esegui la pipeline una volta con RUN_FEATURE_SELECTION=True")
+            print(f"o posiziona i file manualmente in {DATA_PIPELINE_DIR} e {MODEL_OUTPUT_DIR}.")
+            return False
+    
+    # --- ELSE: ESEGUI RFECV ---
+    print("\n--- Avvio 08_feature_selection (Modalità: Esecuzione RFECV) ---")
+    print("RUN_FEATURE_SELECTION è True. Avvio processo RFECV...")
     
     try:
         print(f"Caricamento dati da {DATA_PIPELINE_DIR}...")
@@ -978,7 +1016,7 @@ def run_08_feature_selection():
     except Exception as e:
         print(f"Errore durante la creazione del grafico: {e}")
 
-    print("--- Completato 08_feature_selection ---")
+    print("--- Completato 08_feature_selection (Esecuzione RFECV) ---")
     return True
 
 def run_09_data_splitter():
