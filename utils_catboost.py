@@ -1144,20 +1144,37 @@ def run_10_optimize_and_validate(run_grid_search=False):
 
     print("\nFase 5.2: Training su 60% e Diagnostica su 20% (Validation):\n")
 
+    loaded_iteration = None
     if os.path.exists(ITERATION_OUTPUT_FILE):
-        print(f"Caricamento iterazioni esistenti da {ITERATION_OUTPUT_FILE}...")
-    with open(ITERATION_OUTPUT_FILE, 'r') as f:
-        data = json.load(f)
-        print("Contenuto del file:")
-        print(data)
+        print(f"Trovato file iterazioni esistente: {ITERATION_OUTPUT_FILE}")
+        try:
+            with open(ITERATION_OUTPUT_FILE, 'r') as f:
+                loaded_iteration = json.load(f)['best_iteration']
+            print(f"Numero iterazioni pre-calcolato caricato: {loaded_iteration}")
+        except Exception as e:
+            print(f"Errore caricamento {ITERATION_OUTPUT_FILE}: {e}. Ricalcolo...")
+            loaded_iteration = None
 
     final_params_fit = best_params_clean.copy()
-    final_params_fit.update({
-        'n_estimators': 2000, 'early_stopping_rounds': 50,
-        'eval_metric': 'Logloss', 'custom_metric': ['AUC'],
-        'verbose': 1000, 'random_seed': 42
-    })
-    final_params_fit.pop('objective', None) # Rimuovi se presente
+    if loaded_iteration:
+        # Se abbiamo caricato un'iterazione, la usiamo e disattiviamo l'early stopping
+        final_params_fit.update({
+            'n_estimators': loaded_iteration,
+            'early_stopping_rounds': None, # Disattivato!
+            'eval_metric': 'Logloss', 'custom_metric': ['AUC'],
+            'verbose': 1000, 'random_seed': 42
+        })
+        print(f"Training modello con n_estimators={loaded_iteration} (fisso)...")
+    else:
+        # Comportamento originale: trova la migliore iterazione
+        final_params_fit.update({
+            'n_estimators': 2000,
+            'early_stopping_rounds': 50, # Attivo
+            'eval_metric': 'Logloss', 'custom_metric': ['AUC'],
+            'verbose': 1000, 'random_seed': 42
+        })
+        print("Training modello (max 2000) con Early Stopping (50)...")
+    final_params_fit.pop('objective', None) 
 
     print("Training modello: Train (60%), Eval (20%)...")
     model = CatBoostClassifier(**final_params_fit)
@@ -1169,11 +1186,15 @@ def run_10_optimize_and_validate(run_grid_search=False):
         verbose=1000
     )
 
-    best_iteration = model.get_best_iteration()
-    print(f"\nNumero ottimale di iterazioni (trees) trovato: {best_iteration}")
-    with open(ITERATION_OUTPUT_FILE, 'w') as f:
-        json.dump({'best_iteration': best_iteration}, f, indent=2)
-    print(f"Migliore iterazione salvata in: {ITERATION_OUTPUT_FILE}")
+    if loaded_iteration:
+        best_iteration = loaded_iteration
+        print(f"\nUsata iterazione pre-caricata: {best_iteration}")
+    else:
+        best_iteration = model.get_best_iteration()
+        print(f"\nNumero ottimale di iterazioni (trees) trovato: {best_iteration}")
+        with open(ITERATION_OUTPUT_FILE, 'w') as f:
+            json.dump({'best_iteration': best_iteration}, f, indent=2)
+        print(f"Migliore iterazione salvata in: {ITERATION_OUTPUT_FILE}")
 
     print("\nFase 5.3: Metriche di Performance (su 20% Validation):\n")
     y_pred_val = model.predict(X_val)
