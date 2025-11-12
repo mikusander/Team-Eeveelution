@@ -38,8 +38,8 @@ import matplotlib.pyplot as plt
 BASE_DIR = Path(__file__).resolve().parent
 
 # Input (JSONL originali)
-TRAIN_JSONL_FILE = '/kaggle/input/fds-pokemon-battles-prediction-2025/train.jsonl'
-TEST_JSONL_FILE = '/kaggle/input/fds-pokemon-battles-prediction-2025/test.jsonl'
+TRAIN_JSONL_FILE = train_raw
+TEST_JSONL_FILE = test_raw
 
 # Output FASE 0-4 (Tutti i dati processati)
 DATA_PIPELINE_DIR = BASE_DIR / 'CatBoost_Data_Pipeline'
