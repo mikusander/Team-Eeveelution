@@ -16,7 +16,7 @@ from tqdm import tqdm
 import math
 from collections import Counter
 import warnings
-from pathlib import Path  # Uso di pathlib per una gestione moderna dei percorsi
+from pathlib import Path 
 import lightgbm as lgb
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score

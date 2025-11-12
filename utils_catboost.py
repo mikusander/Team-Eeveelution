@@ -14,10 +14,9 @@ import numpy as np
 import os
 import json
 import time
-import pprint
 import traceback
 from pathlib import Path
-from collections import defaultdict, Counter
+from collections import defaultdict
 
 # Import da SKLearn e CatBoost
 from sklearn.model_selection import train_test_split, KFold, GridSearchCV, StratifiedKFold
