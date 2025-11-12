@@ -2,12 +2,9 @@
 Libreria di utilità per lo Stacking Ensemble.
 
 Questo modulo contiene tutte le funzioni, le costanti e le configurazioni
-di percorso necessarie per addestrare i meta-modelli (L1 e L2) e
+di percorso necessarie per addestrare i meta-modelli (L1 e L2), Logistic Regression e
 generare le submission finali.
 
-MODIFICATO: La funzione 'train_and_evaluate_models' è stata divisa in:
-- train_evaluate_logreg: Gestisce e salva solo il modello LogReg.
-- train_and_select_best_model: Confronta tutti i modelli e salva solo il 'BEST'.
 """
 
 # --- 1. IMPORT CONSOLIDATI ---
