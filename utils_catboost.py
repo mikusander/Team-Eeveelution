@@ -38,9 +38,8 @@ import matplotlib.pyplot as plt
 BASE_DIR = Path(__file__).resolve().parent
 
 # Input (JSONL originali)
-INPUT_JSONL_DIR = BASE_DIR / 'Input'
-TRAIN_JSONL_FILE = INPUT_JSONL_DIR / 'train.jsonl'
-TEST_JSONL_FILE = INPUT_JSONL_DIR / 'test.jsonl'
+TRAIN_JSONL_FILE = '/kaggle/input/fds-pokemon-battles-prediction-2025/train.jsonl'
+TEST_JSONL_FILE = '/kaggle/input/fds-pokemon-battles-prediction-2025/test.jsonl'
 
 # Output FASE 0-4 (Tutti i dati processati)
 DATA_PIPELINE_DIR = BASE_DIR / 'CatBoost_Data_Pipeline'
@@ -125,7 +124,7 @@ def ensure_directories():
     """Crea tutte le cartelle di output necessarie se non esistono."""
     print("Verifica dell'esistenza delle cartelle di output...")
     dirs_to_create = [
-        INPUT_JSONL_DIR, DATA_PIPELINE_DIR, MODEL_OUTPUT_DIR,
+        DATA_PIPELINE_DIR, MODEL_OUTPUT_DIR,
         SUBMISSION_DIR, OOF_DIR
     ]
     for dir_path in dirs_to_create:
