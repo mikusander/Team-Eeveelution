@@ -95,7 +95,7 @@ AUC_CURVE_FILE = MODEL_OUTPUT_DIR / 'validation_auc_learning_curve.png'
 ROC_CURVE_FILE = MODEL_OUTPUT_DIR / 'validation_roc_auc_curve.png'
 
 # FASE 6
-SUBMISSION_FILE_CSV = SUBMISSION_DIR / 'submission_catboost_final.csv'
+SUBMISSION_FILE_CSV = SUBMISSION_DIR / 'submission_catboost_100pct_PROBA.csv'
 OOF_FILE_NPY = OOF_DIR / 'oof_catboost_proba.npy'
 TEST_PREDS_NPY_FILE = OOF_DIR / 'test_preds_catboost_proba.npy'
 
@@ -1160,7 +1160,7 @@ def run_10_optimize_and_validate(run_grid_search=False):
         # Se abbiamo caricato un'iterazione, la usiamo e disattiviamo l'early stopping
         final_params_fit.update({
             'n_estimators': loaded_iteration,
-            'early_stopping_rounds': None, # Disattivato!
+            'early_stopping_rounds': None, 
             'eval_metric': 'Logloss', 'custom_metric': ['AUC'],
             'verbose': 1000, 'random_seed': 42
         })

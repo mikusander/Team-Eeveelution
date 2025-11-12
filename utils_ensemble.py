@@ -4,6 +4,10 @@ Libreria di utilità per lo Stacking Ensemble.
 Questo modulo contiene tutte le funzioni, le costanti e le configurazioni
 di percorso necessarie per addestrare i meta-modelli (L1 e L2) e
 generare le submission finali.
+
+MODIFICATO: La funzione 'train_and_evaluate_models' è stata divisa in:
+- train_evaluate_logreg: Gestisce e salva solo il modello LogReg.
+- train_and_select_best_model: Confronta tutti i modelli e salva solo il 'BEST'.
 """
 
 # --- 1. IMPORT CONSOLIDATI ---
@@ -35,35 +39,20 @@ BASE_DIR = Path(__file__).resolve().parent
 OOF_PREDS_DIR = BASE_DIR / 'OOF_Predictions'
 META_MODEL_DIR = BASE_DIR / 'Meta_Model'
 SUBMISSION_DIR = BASE_DIR / 'Submissions'
-
-# Nota: I file OOF e Target provengono da pipeline diverse
 DATA_PIPELINE_DIR_CB = BASE_DIR / 'CatBoost_Data_Pipeline'
 DATA_PIPELINE_DIR_LGBM = BASE_DIR / 'LightGBM_Data_Pipeline'
-
-# File OOF (Input)
 OOF_LGBM_FILE = OOF_PREDS_DIR / 'oof_lgbm_proba.npy'
 OOF_CATBOOST_FILE = OOF_PREDS_DIR / 'oof_catboost_proba.npy'
 OOF_XGBOOST_FILE = OOF_PREDS_DIR / 'oof_xgboost_proba.npy'
-
-# File Target (Input)
 TARGET_FILE_IN = DATA_PIPELINE_DIR_CB / 'target_train.csv'
-
-# File Previsioni Test (Input)
 TEST_PREDS_LGBM_FILE = OOF_PREDS_DIR / 'test_preds_lgbm_proba.npy'
 TEST_PREDS_CATBOOST_FILE = OOF_PREDS_DIR / 'test_preds_catboost_proba.npy'
 TEST_PREDS_XGBOOST_FILE = OOF_PREDS_DIR / 'test_preds_xgboost_proba.npy'
-
-# File ID Test (Input)
 TEST_IDS_FILE_IN = DATA_PIPELINE_DIR_LGBM / 'test_ids.csv'
-
-# File di Output (Modelli)
 META_MODEL_FILE_LOGREG = META_MODEL_DIR / 'stacking_meta_model_logreg.joblib'
 META_MODEL_FILE_BEST = META_MODEL_DIR / 'stacking_meta_model_BEST.joblib'
-
-# File di Output (Submission)
 SUBMISSION_FILE_LOGREG = SUBMISSION_DIR / 'submission_stacking_logreg_3models.csv'
 SUBMISSION_FILE_BEST = SUBMISSION_DIR / 'submission_stacking_BEST_L1_model.csv'
-
 
 # --- 3. FUNZIONI DI CARICAMENTO DATI ---
 
@@ -96,11 +85,11 @@ def load_oof_data():
         return X_meta, y_meta
 
     except FileNotFoundError as e:
-        print(f"❌ ERRORE: File non trovato: {e}")
+        print(f"ERRORE: File non trovato: {e}")
         print("Assicurati di aver eseguito le pipeline dei modelli base (LGBM, CB, XGB).")
         return None, None
     except Exception as e:
-        print(f"❌ ERRORE durante il caricamento dei dati OOF: {e}")
+        print(f"ERRORE durante il caricamento dei dati OOF: {e}")
         return None, None
 
 def load_test_data():
@@ -110,8 +99,6 @@ def load_test_data():
         test_preds_lgbm_all_folds = np.load(TEST_PREDS_LGBM_FILE)
         test_preds_catboost = np.load(TEST_PREDS_CATBOOST_FILE)
         test_preds_xgboost = np.load(TEST_PREDS_XGBOOST_FILE)
-
-        # Logica specifica di LGBM: fa la media dei 10 fold
         if test_preds_lgbm_all_folds.ndim == 2:
             print(f"Trovate {test_preds_lgbm_all_folds.shape[0]} fold per LGBM. Calcolo la media...")
             test_preds_lgbm = np.mean(test_preds_lgbm_all_folds, axis=0)
@@ -133,34 +120,89 @@ def load_test_data():
         return X_test_meta, test_ids
 
     except FileNotFoundError as e:
-        print(f"❌ ERRORE: File .npy o .csv non trovato: {e}")
+        print(f"ERRORE: File .npy o .csv non trovato: {e}")
         print("Assicurati di aver generato le previsioni sul test set da TUTTI E 3 i modelli base.")
         return None, None
     except Exception as e:
-        print(f"❌ ERRORE during il caricamento dei dati Test: {e}")
+        print(f"ERRORE durante il caricamento dei dati Test: {e}")
         return None, None
 
 
 # --- 4. FUNZIONI DI TRAINING E SUBMISSION ---
 
-def train_and_evaluate_models(X_meta, y_meta):
+def _evaluate_model(model, X_meta, y_meta):
+    """Helper interno per addestrare e valutare un modello."""
+    model.fit(X_meta, y_meta)
+    
+    # Valutazione (Predizioni Binarie per Accuracy)
+    meta_preds_binary = model.predict(X_meta)
+    oof_accuracy = accuracy_score(y_meta, meta_preds_binary)
+
+    # Valutazione (Score per AUC)
+    if hasattr(model, "predict_proba"):
+        meta_preds_scores = model.predict_proba(X_meta)[:, 1]
+        oof_auc = roc_auc_score(y_meta, meta_preds_scores)
+    elif hasattr(model, "decision_function"):
+        meta_preds_scores = model.decision_function(X_meta)
+        oof_auc = roc_auc_score(y_meta, meta_preds_scores)
+    else: # VotingHard
+        oof_auc = roc_auc_score(y_meta, meta_preds_binary) 
+            
+    return oof_accuracy, oof_auc
+
+def train_evaluate_logreg(X_meta, y_meta):
     """
-    Addestra tutti i meta-modelli (L1 e L2), li valuta,
-    seleziona il migliore e salva i modelli LogReg e Best.
+    [FUNZIONE SPECIFICA LOGREG]
+    Addestra, valuta e salva il meta-modello LogReg.
     """
     print("\n" + "="*30)
-    print("INIZIO FASE 2: Addestramento e Selezione Meta-Modelli")
+    print("INIZIO FASE 2a: Addestramento Modello LogReg")
+    print("="*30)
+    
+    model_logreg = LogisticRegression(random_state=SEED, C=1.0, solver='liblinear')
+    
+    print("Addestramento Regressione Logistica...")
+    model_logreg.fit(X_meta, y_meta)
+    print("Addestramento completato.")
+
+    # Valutazione
+    meta_preds_proba = model_logreg.predict_proba(X_meta)[:, 1]
+    meta_preds_binary = model_logreg.predict(X_meta)
+    oof_accuracy = accuracy_score(y_meta, meta_preds_binary)
+    oof_auc = roc_auc_score(y_meta, meta_preds_proba)
+
+    print("PESI IMPARATI (Coefficienti) per [LGBM, CatBoost, XGBoost]:")
+    print(f"  Coefficienti: {model_logreg.coef_}")
+    print(f"  Intercetta: {model_logreg.intercept_}")
+    print(f"\nValutazione (sulle OOF):")
+    print(f"  Accuracy: {oof_accuracy:.6f}")
+    print(f"  AUC:      {oof_auc:.6f}")
+
+    # Salva il modello LogReg
+    print(f"\nSalvataggio Modello LogReg in: {META_MODEL_FILE_LOGREG}")
+    joblib.dump(model_logreg, META_MODEL_FILE_LOGREG)
+    
+    print("="*30)
+    print("FASE 2a Completata: Modello 'LogReg' salvato.")
+    print("="*30)
+    
+    return model_logreg
+
+def train_and_select_best_model(X_meta, y_meta):
+    """
+    [FUNZIONE MODELLI MULTIPLI]
+    Addestra tutti i meta-modelli (L1 e L2), li confronta,
+    e salva solo il modello MIGLIORE.
+    """
+    print("\n" + "="*30)
+    print("INIZIO FASE 2b: Selezione Meta-Modello MIGLIORE")
     print("="*30)
 
     # --- Definizione Modelli ---
-    
-    # Modelli L1
     model_logreg = LogisticRegression(random_state=SEED, C=1.0, solver='liblinear')
     model_ridge = RidgeClassifierCV(alphas=np.logspace(-3, 3, 10), cv=5)
     model_lgbm = LGBMClassifier(n_estimators=100, max_depth=2, random_state=SEED, force_col_wise=True, verbose=-1)
-
-    # Modelli L2 (Ensemble di L1)
-    # Ridge non ha predict_proba, quindi è escluso dal soft voting
+    
     estimators_soft = [
         ('logreg', LogisticRegression(random_state=SEED, C=1.0, solver='liblinear')),
         ('lgbm', LGBMClassifier(n_estimators=100, max_depth=2, random_state=SEED, force_col_wise=True, verbose=-1))
@@ -186,25 +228,12 @@ def train_and_evaluate_models(X_meta, y_meta):
 
     # --- Addestramento, Valutazione e Selezione ---
     for name, model in models_to_train.items():
-        print(f"\n--- Addestramento e Valutazione: {name} ---")
+        print(f"\n--- Confronto: {name} ---")
         
-        model.fit(X_meta, y_meta)
-        
-        # Valutazione (Predizioni Binarie per Accuracy)
-        meta_preds_binary = model.predict(X_meta)
-        oof_accuracy = accuracy_score(y_meta, meta_preds_binary)
+        # Usa l'helper per addestrare e valutare
+        oof_accuracy, oof_auc = _evaluate_model(model, X_meta, y_meta)
 
-        # Valutazione (Score per AUC)
-        if hasattr(model, "predict_proba"):
-            meta_preds_scores = model.predict_proba(X_meta)[:, 1]
-            oof_auc = roc_auc_score(y_meta, meta_preds_scores)
-        elif hasattr(model, "decision_function"):
-            meta_preds_scores = model.decision_function(X_meta)
-            oof_auc = roc_auc_score(y_meta, meta_preds_scores)
-        else: # VotingHard
-            oof_auc = roc_auc_score(y_meta, meta_preds_binary) # AUC su 0/1
-
-        print(f"  ✅ OOF Accuracy: {oof_accuracy:.6f}")
+        print(f"  OOF Accuracy: {oof_accuracy:.6f}")
         print(f"  OOF AUC:      {oof_auc:.6f}")
         
         results[name] = {'accuracy': oof_accuracy, 'auc': oof_auc, 'model': model}
@@ -216,23 +245,20 @@ def train_and_evaluate_models(X_meta, y_meta):
             best_model_obj = model
 
     # --- Selezione e Salvataggio ---
-    print("\n--- 🏆 Selezione Modello Migliore (basata su OOF Accuracy) 🏆 ---")
+    print("\n--- Selezione Modello Migliore (basata su OOF Accuracy) ---")
     print(f"Modello migliore: {best_model_name}")
     print(f"  OOF Accuracy: {results[best_model_name]['accuracy']:.6f}")
     print(f"  OOF AUC: {results[best_model_name]['auc']:.6f}")
 
-    # Salva entrambi i modelli richiesti
-    print(f"Salvataggio Modello LogReg in: {META_MODEL_FILE_LOGREG}")
-    joblib.dump(results['LogReg']['model'], META_MODEL_FILE_LOGREG)
-    
+    # Salva SOLO il modello migliore
     print(f"Salvataggio Modello MIGLIORE in: {META_MODEL_FILE_BEST}")
     joblib.dump(best_model_obj, META_MODEL_FILE_BEST)
     
     print("="*30)
-    print("FASE 2 Completata: Modelli addestrati e salvati.")
+    print("FASE 2b Completata: Modello 'BEST' salvato.")
     print("="*30)
     
-    return results['LogReg']['model'], best_model_obj
+    return best_model_obj
 
 def generate_submission(meta_model, X_test_meta, test_ids, output_filename):
     """
@@ -249,10 +275,10 @@ def generate_submission(meta_model, X_test_meta, test_ids, output_filename):
         })
         submission_df.to_csv(output_filename, index=False)
         
-        print(f"✅ Submission salvata in: {output_filename}")
+        print(f"Submission salvata in: {output_filename}")
         print(submission_df.head())
         return True
         
     except Exception as e:
-        print(f"❌ ERRORE durante la generazione della submission {output_filename.name}: {e}")
+        print(f"ERRORE durante la generazione della submission {output_filename.name}: {e}")
         return False
