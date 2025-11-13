@@ -259,8 +259,6 @@ def quick_boost_features_v2(record: dict) -> dict:
     
     return out
 
-# SOSTITUISCI INTERAMENTE la funzione summary_from_timeline_FULL() con questa versione corretta:
-
 def summary_from_timeline_FULL(timeline: list, p1_team: list) -> dict:
     out = {}
     if not timeline: return {}
@@ -552,6 +550,16 @@ def create_features_from_raw(data: list) -> pd.DataFrame:
     if 'player_won' in df.columns: df['player_won'] = df['player_won'].astype(int)
     return df.fillna(0)
 
+def ensure_directories():
+    """Creates all necessary output directories."""
+    print("Verifying output directories...")
+    dirs_to_create = [
+        INPUT_DIR_JSONL, DATA_DIR, MODEL_OUTPUT_DIR,
+        SUBMISSION_DIR, OOF_DIR
+    ]
+    for dir_path in dirs_to_create:
+        os.makedirs(dir_path, exist_ok=True)
+    print("Directories verified.")
 
 # --- 6. PIPELINE FUNCTIONS (Phase Execution) ---
 
