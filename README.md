@@ -1,32 +1,34 @@
 # Team Eeveelution: Pokémon Battle Prediction
 
-Questo repository contiene il codice per una pipeline di machine learning progettata per predire l'esito delle battaglie Pokémon.
+This repository contains the code for a machine learning pipeline designed to predict the outcome of Pokémon battles.
 
-Il framework è costruito attorno a un modello **CatBoost**, ma è esplicitamente progettato per produrre output (file `.npy`) adatti per l'**ensembling** (sovrapposizione) con altri modelli, cioè LightGBM e XGBoost.
+The framework utilizes **CatBoost**, **LightGBM**, and **XGBoost** as its core models, and is explicitly designed to produce submissions and files suitable for **ensembling** (stacking/blending).
 
-## Guida al Repository
+## Repository Guide
 
-Di seguito è riportata una breve descrizione dei file e delle cartelle principali e del loro scopo.
+Below is a brief description of the main files and folders and their purpose.
 
-### Cartelle Principali
+### Main Folders
 
 * **/CatBoost_Data_Pipeline**:
-    Questa è la cartella di output per tutti i file `.csv` intermedi. Contiene i dati processati, le feature ingegnerizzate e i set di dati suddivisi (train/validation/holdout) pronti per essere usati dal modello CatBoost.
+    This is the output folder for all intermediate `.csv` files. It contains the processed data, engineered features, and split datasets (train/validation/holdout) ready to be used by the CatBoost model.
 
 * **/*_Model_Outputs**:
-    Salva tutti i risultati dell'analisi per ogni modello. Per CatBoost include grafici diagnostici (es. Feature Importance, ROC/AUC, Matrice di Confusione), report di classificazione e i file `.json` con i parametri e le iterazioni ottimali. Per tutti gli altri sono presenti i preprocessing_medians e le final_features.json
+    Saves all analysis results for each model. For CatBoost, it includes diagnostic plots (e.g., Feature Importance, ROC/AUC, Confusion Matrix), classification reports, and the `.json` files with optimal parameters and iterations. For all others, it includes the preprocessing_medians and final_features.json.
 
 * **/Meta_Model**:
-    Salva i modelli che hanno generato gli stacking, quindi sia LogReg e sia BEST_model (scelto tra LGBM, LogReg, Ridge, VotingSoft, VotingHard)
+    Saves the models that generated the stacking, including both LogReg and the BEST_model (chosen from LGBM, LogReg, Ridge, VotingSoft, VotingHard).
 
 * **/OOF_Predictions**:
-    Cartella cruciale per l'ensembling. Contiene le previsioni finali sia per il set di training (Out-of-Fold) che per il set di test, salvate come file `.npy`. 
+    A crucial folder for ensembling. It contains the final predictions for both the training set (Out-of-Fold) and the test set, saved as `.npy` files.
 
 * **/Submissions**:
-    Contiene i file di `submission.csv`, sia quelli utili per il blending (basati sulle probabilità) sia quelli finali blended e stacking.
+    Contains the `submission.csv` files, both those useful for blending (based on probabilities) and the final blended and stacked ones.
 
-### File Principali
+### Main Files
 
 * `utils_*.py`:
-    Il "cervello" dell'intera pipeline. Questi file contengono **tutta la logica**, le funzioni di utility, i percorsi e le definizioni di ogni fase per il caricamento dei dati, la feature engineering, la validazione, l'addestramento e il blending/stacking. 
+    The "brain" of the entire pipeline. These files contain **all the logic**, utility functions, paths, and definitions for each phase of data loading, feature engineering, validation, training, and blending/stacking.
 
+* `Report_Team_Eeveelution.pdf`:
+    The PDF report file related to the challenge.
