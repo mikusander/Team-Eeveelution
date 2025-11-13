@@ -1,9 +1,10 @@
 """
-Utility library for the Stacking Ensemble.
+Utility library for Ensemble methods (Stacking and Blending).
 
 This module contains all the necessary functions, constants, and path configurations
-to train the meta-models (L1 and L2), Logistic Regression, and
-generate the final submissions.
+for:
+1. Stacking Ensemble (L1/L2 meta-models, Logistic Regression)
+2. Blending Ensemble (Simple weighted average)
 
 """
 
@@ -38,6 +39,8 @@ META_MODEL_DIR = BASE_DIR / 'Meta_Model'
 SUBMISSION_DIR = BASE_DIR / 'Submissions'
 DATA_PIPELINE_DIR_CB = BASE_DIR / 'CatBoost_Data_Pipeline'
 DATA_PIPELINE_DIR_LGBM = BASE_DIR / 'LightGBM_Data_Pipeline'
+
+# --- Paths for Stacking Ensemble (Meta-Modeling) ---
 OOF_LGBM_FILE = OOF_PREDS_DIR / 'oof_lgbm_proba.npy'
 OOF_CATBOOST_FILE = OOF_PREDS_DIR / 'oof_catboost_proba.npy'
 OOF_XGBOOST_FILE = OOF_PREDS_DIR / 'oof_xgboost_proba.npy'
@@ -51,7 +54,14 @@ META_MODEL_FILE_BEST = META_MODEL_DIR / 'stacking_meta_model_BEST.joblib'
 SUBMISSION_FILE_LOGREG = SUBMISSION_DIR / 'submission_stacking_logreg_3models.csv'
 SUBMISSION_FILE_BEST = SUBMISSION_DIR / 'submission_stacking_BEST_L1_model.csv'
 
-# --- 3. DATA LOADING FUNCTIONS ---
+# --- Paths for Blending Ensemble (Averaging) ---
+LGBM_PROBA_FILE = SUBMISSION_DIR / 'submission_lgbm_100pct_PROBA.csv'
+CATBOOST_PROBA_FILE = SUBMISSION_DIR / 'submission_catboost_100pct_PROBA.csv'
+XGBOOST_PROBA_FILE = SUBMISSION_DIR / 'submission_xgboost_100pct_PROBA.csv'
+BLENDED_SUBMISSION_CLASS_OUT = SUBMISSION_DIR / 'submission_blended_LGBM_CAT_XGB_CLASS.csv'
+
+
+# --- 3. DATA LOADING FUNCTIONS (For STACKING) ---
 
 def ensure_directories():
     """Creates all necessary output directories."""
@@ -125,7 +135,7 @@ def load_test_data():
         return None, None
 
 
-# --- 4. TRAINING AND SUBMISSION FUNCTIONS ---
+# --- 4. STACKING ENSEMBLE FUNCTIONS (Training & Submission) ---
 
 def _evaluate_model(model, X_meta, y_meta):
     """Internal helper to train and evaluate a model."""
@@ -149,11 +159,11 @@ def _evaluate_model(model, X_meta, y_meta):
 
 def train_evaluate_logreg(X_meta, y_meta):
     """
-    [LOGREG SPECIFIC FUNCTION]
+    [STACKING - LOGREG]
     Trains, evaluates, and saves the LogReg meta-model.
     """
     print("\n" + "="*30)
-    print("START PHASE 2a: LogReg Model Training")
+    print("START PHASE 2a: LogReg Model Training (Stacking)")
     print("="*30)
     
     model_logreg = LogisticRegression(random_state=SEED, C=1.0, solver='liblinear')
@@ -187,12 +197,12 @@ def train_evaluate_logreg(X_meta, y_meta):
 
 def train_and_select_best_model(X_meta, y_meta):
     """
-    [MULTIPLE MODELS FUNCTION]
+    [STACKING - BEST MODEL]
     Trains all meta-models (L1 and L2), compares them,
     and saves only the BEST model.
     """
     print("\n" + "="*30)
-    print("START PHASE 2b: Selecting BEST Meta-Model")
+    print("START PHASE 2b: Selecting BEST Meta-Model (Stacking)")
     print("="*30)
 
     # --- Model Definitions ---
@@ -259,9 +269,10 @@ def train_and_select_best_model(X_meta, y_meta):
 
 def generate_submission(meta_model, X_test_meta, test_ids, output_filename):
     """
+    [STACKING - SUBMISSION]
     Generates a .csv submission file using a trained meta-model.
     """
-    print(f"\nGenerating submission for: {output_filename.name}...")
+    print(f"\nGenerating stacking submission for: {output_filename.name}...")
     
     try:
         final_predictions = meta_model.predict(X_test_meta)
@@ -278,4 +289,98 @@ def generate_submission(meta_model, X_test_meta, test_ids, output_filename):
         
     except Exception as e:
         print(f"ERROR during submission generation {output_filename.name}: {e}")
+        return False
+
+
+# --- 5. BLENDING ENSEMBLE FUNCTION (Averaging) ---
+
+def run_blending_ensemble():
+    """
+    [BLENDING - Averaging]
+    Runs the simple 3-model probability blending.
+    Loads CSVs, merges, calculates weighted average, and saves.
+    """
+    print("\n" + "="*30)
+    print("START PHASE: Simple Blending Ensemble (LGBM+CAT+XGB)")
+    print("="*30)
+    
+    # Weights for blending
+    LGBM_WEIGHT = 1/3
+    CATBOOST_WEIGHT = 1/3
+    XGBOOST_WEIGHT = 1/3
+
+    # --- 1. Loading ---
+    try:
+        print(f"Loading LGBM proba from: {LGBM_PROBA_FILE}")
+        lgbm_df = pd.read_csv(LGBM_PROBA_FILE)
+        
+        print(f"Loading CatBoost proba from: {CATBOOST_PROBA_FILE}")
+        catboost_df = pd.read_csv(CATBOOST_PROBA_FILE)
+        
+        print(f"Loading XGBoost proba from: {XGBOOST_PROBA_FILE}")
+        xgboost_df = pd.read_csv(XGBOOST_PROBA_FILE)
+        
+    except FileNotFoundError as e:
+        print(f"ERROR: File not found: {e}")
+        print("Make sure you have generated ALL THREE probability .csv files.")
+        print(f"(Check: '{LGBM_PROBA_FILE}', '{CATBOOST_PROBA_FILE}', '{XGBOOST_PROBA_FILE}')")
+        return False
+    except Exception as e:
+        print(f"ERROR during loading: {e}")
+        return False
+
+    # --- 2. Merging and Blending ---
+    print("Merging DataFrames by battle_id...")
+    try:
+        # Rename probability columns for clarity
+        
+        # LGBM file uses 'player_won' for probabilities
+        lgbm_df = lgbm_df.rename(columns={'player_won': 'proba_lgbm'})
+        
+        # Other files use 'player_won_proba'
+        catboost_df = catboost_df.rename(columns={'player_won_proba': 'proba_catboost'})
+        xgboost_df = xgboost_df.rename(columns={'player_won_proba': 'proba_xgboost'})
+
+        # Merge using battle_id
+        blended_df = pd.merge(lgbm_df[['battle_id', 'proba_lgbm']],
+                              catboost_df[['battle_id', 'proba_catboost']],
+                              on='battle_id')
+        blended_df = pd.merge(blended_df,
+                              xgboost_df[['battle_id', 'proba_xgboost']],
+                              on='battle_id')
+        
+        if len(blended_df) != len(lgbm_df):
+            print(f"WARNING: Length mismatch after merge! ({len(blended_df)} vs {len(lgbm_df)})")
+            print("Check that all submission files have the same number of rows (e.g., 5000).")
+
+    except KeyError as e:
+        print(f"ERROR: Missing column: {e}")
+        print("Ensure the CSVs contain 'battle_id' and the correct probability column.")
+        print(f"LGBM ('{LGBM_PROBA_FILE}') expects 'player_won' (containing probabilities).")
+        print(f"CatBoost/XGBoost expect 'player_won_proba'.")
+        return False
+    except Exception as e:
+        print(f"ERROR during merge: {e}")
+        return False
+
+    print("Calculating weighted average (LGBM + CAT + XGB)...")
+    # Calculate the final probability
+    blended_df['final_proba'] = (LGBM_WEIGHT * blended_df['proba_lgbm']) + \
+                                (CATBOOST_WEIGHT * blended_df['proba_catboost']) + \
+                                (XGBOOST_WEIGHT * blended_df['proba_xgboost'])
+
+    # Convert final probability to 0 or 1
+    blended_df['player_won'] = (blended_df['final_proba'] > 0.5).astype(int)
+
+    # --- 3. Saving Final Submission ---
+    final_submission_class_df = blended_df[['battle_id', 'player_won']]
+    try:
+        final_submission_class_df.to_csv(BLENDED_SUBMISSION_CLASS_OUT, index=False)
+        print("\n--- BLENDING (3 MODELS) COMPLETE ---")
+        print(f"Final submission (CLASSES 0/1) saved to: {BLENDED_SUBMISSION_CLASS_OUT}")
+        print(final_submission_class_df.head())
+        print(f"Class Distribution: \n{final_submission_class_df['player_won'].value_counts(normalize=True)}")
+        return True
+    except Exception as e:
+        print(f"ERROR during save (Classes): {e}")
         return False
