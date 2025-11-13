@@ -10,9 +10,6 @@ Di seguito è riportata una breve descrizione dei file e delle cartelle principa
 
 ### Cartelle Principali
 
-* **/Input**:
-    Contiene i dati grezzi della competizione, `train.jsonl` e `test.jsonl`.
-
 * **/CatBoost_Data_Pipeline**:
     Questa è la cartella di output per tutti i file `.csv` intermedi. Contiene i dati processati, le feature ingegnerizzate e i set di dati suddivisi (train/validation/holdout) pronti per essere usati dal modello CatBoost.
 
