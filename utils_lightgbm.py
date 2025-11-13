@@ -852,7 +852,7 @@ def run_03_training_and_submission():
     # Save PROBABILITY submission (for ensemble)
     sub_ensemble_proba = pd.DataFrame({
         'battle_id': test_ids_df['battle_id'].astype(np.int64),
-        'player_won': mean_test_proba
+        'player_won_proba': mean_test_proba
     })
     sub_ensemble_proba.to_csv(SUB_ENSEMBLE_PROBA_OUT, index=False)
     print(f"ENSEMBLE submission (Proba) saved to: {SUB_ENSEMBLE_PROBA_OUT}")

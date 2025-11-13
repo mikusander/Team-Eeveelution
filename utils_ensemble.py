@@ -333,7 +333,7 @@ def run_blending_ensemble():
     print("Merging DataFrames by battle_id...")
     try:
         # Rename probability columns for clarity
-        lgbm_df = lgbm_df.rename(columns={'player_won': 'proba_lgbm'})
+        lgbm_df = lgbm_df.rename(columns={'player_won_proba': 'proba_lgbm'})
         catboost_df = catboost_df.rename(columns={'player_won_proba': 'proba_catboost'})
         xgboost_df = xgboost_df.rename(columns={'player_won_proba': 'proba_xgboost'})
 

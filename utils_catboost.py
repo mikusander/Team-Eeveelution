@@ -1398,7 +1398,7 @@ def run_11_create_submission():
     print(f"Saving submission file (.csv) with predictions to {SUBMISSION_FILE_CSV}...")
     submission_df = pd.DataFrame({
         'battle_id': test_ids,
-        'player_won': (y_pred_proba > 0.5).astype(int)
+        'player_won_proba': y_pred_proba
     })
     submission_df.to_csv(SUBMISSION_FILE_CSV, index=False)
 
