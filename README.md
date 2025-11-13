@@ -16,8 +16,11 @@ Di seguito è riportata una breve descrizione dei file e delle cartelle principa
 * **/CatBoost_Data_Pipeline**:
     Questa è la cartella di output per tutti i file `.csv` intermedi. Contiene i dati processati, le feature ingegnerizzate e i set di dati suddivisi (train/validation/holdout) pronti per essere usati dal modello CatBoost.
 
-* **/CatBoost_Model_Outputs**:
-    Salva tutti i risultati dell'analisi del modello CatBoost. Include grafici diagnostici (es. Feature Importance, ROC/AUC, Matrice di Confusione), report di classificazione e i file `.json` con i parametri e le iterazioni ottimali.
+* **/*_Model_Outputs**:
+    Salva tutti i risultati dell'analisi per ogni modello. Per CatBoost include grafici diagnostici (es. Feature Importance, ROC/AUC, Matrice di Confusione), report di classificazione e i file `.json` con i parametri e le iterazioni ottimali. Per tutti gli altri sono presenti i preprocessing_medians e le final_features.json
+
+* **/Meta_Model**:
+    Salva i modelli che hanno generato gli stacking, quindi sia LogReg e sia BEST_model (scelto tra LGBM, LogReg, Ridge, VotingSoft, VotingHard)
 
 * **/OOF_Predictions**:
     Cartella cruciale per l'ensembling. Contiene le previsioni finali sia per il set di training (Out-of-Fold) che per il set di test, salvate come file `.npy`. 
