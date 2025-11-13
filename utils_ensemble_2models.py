@@ -44,7 +44,11 @@ DATA_PIPELINE_DIR_LGBM = BASE_DIR / 'LightGBM_Data_Pipeline'
 # --- Paths for Stacking Ensemble (Meta-Modeling) ---
 OOF_LGBM_FILE = OOF_PREDS_DIR / 'oof_lgbm_proba.npy'
 OOF_XGBOOST_FILE = OOF_PREDS_DIR / 'oof_xgboost_proba.npy'
-TARGET_FILE_IN = DATA_PIPELINE_DIR_LGBM / 'target_train.csv' # Assuming target is also in LGBM pipeline
+
+# --- MODIFICA 1: Percorso corretto per il file target ---
+# Questo ora punta al file .npy generato dalla pipeline LGBM
+TARGET_FILE_IN = DATA_PIPELINE_DIR_LGBM / 'y_train.npy' 
+
 TEST_PREDS_LGBM_FILE = OOF_PREDS_DIR / 'test_preds_lgbm_proba.npy'
 TEST_PREDS_XGBOOST_FILE = OOF_PREDS_DIR / 'test_preds_xgboost_proba.npy'
 TEST_IDS_FILE_IN = DATA_PIPELINE_DIR_LGBM / 'test_ids.csv'
@@ -64,7 +68,6 @@ BLENDED_SUBMISSION_CLASS_OUT = SUBMISSION_DIR / 'submission_blended_LGBM_XGB_CLA
 def ensure_directories():
     """Creates all necessary output directories."""
     print("Checking output directories...")
-    # Removed DATA_PIPELINE_DIR_CB
     for dir_path in [OOF_PREDS_DIR, META_MODEL_DIR, SUBMISSION_DIR, DATA_PIPELINE_DIR_LGBM]:
         os.makedirs(dir_path, exist_ok=True)
     print("Directories verified.")
@@ -76,7 +79,9 @@ def load_oof_data():
         oof_lgbm = np.load(OOF_LGBM_FILE)
         oof_xgboost = np.load(OOF_XGBOOST_FILE)
 
-        y_meta = pd.read_csv(TARGET_FILE_IN).values.ravel()
+        # --- MODIFICA 2: Logica di caricamento corretta ---
+        # Usiamo np.load per il file .npy invece di pd.read_csv
+        y_meta = np.load(TARGET_FILE_IN).ravel()
 
         if not (len(oof_lgbm) == len(y_meta) and 
                 len(oof_xgboost) == len(y_meta)):
@@ -92,6 +97,7 @@ def load_oof_data():
     except FileNotFoundError as e:
         print(f"ERROR: File not found: {e}")
         print("Make sure you have run the base model pipelines (LGBM, XGB).")
+        print(f"Specifically, check for: {OOF_LGBM_FILE}, {OOF_XGBOOST_FILE}, and {TARGET_FILE_IN}")
         return None, None
     except Exception as e:
         print(f"ERROR while loading OOF data: {e}")
