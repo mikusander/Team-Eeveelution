@@ -1,14 +1,14 @@
 """
-Libreria di utilità per la pipeline CatBoost Pokémon.
+Utility library for the Pokémon CatBoost pipeline.
 
-Questo modulo contiene tutte le funzioni necessarie per l'intera pipeline:
-- Costanti e percorsi globali
-- Funzioni helper per il parsing e il feature engineering
-- Funzioni di pipeline per ogni fase (00-11)
+This module contains all necessary functions for the entire pipeline:
+- Global constants and paths
+- Helper functions for parsing and feature engineering
+- Pipeline functions for each phase (00-11)
 
 """
 
-# --- 1. IMPORT CONSOLIDATI ---
+# --- 1. CONSOLIDATED IMPORTS ---
 import pandas as pd
 import numpy as np
 import os
@@ -18,7 +18,7 @@ import traceback
 from pathlib import Path
 from collections import defaultdict
 
-# Import da SKLearn e CatBoost
+# Imports from SKLearn and CatBoost
 from sklearn.model_selection import train_test_split, KFold, GridSearchCV, StratifiedKFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import SimpleImputer
@@ -26,56 +26,56 @@ from sklearn.feature_selection import RFECV
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, roc_auc_score, roc_curve
 from catboost import CatBoostClassifier
 
-# Import per i grafici
+# Imports for plots
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-# --- 2. CONFIGURAZIONE GLOBALE E PERCORSI ---
+# --- 2. GLOBAL CONFIGURATION AND PATHS ---
 
-# --- Flag di Esecuzione ---
+# --- Execution Flags ---
 RUN_FEATURE_SELECTION = False
 
-# --- Struttura Cartelle Principale ---
+# --- Main Folder Structure ---
 BASE_DIR = Path(__file__).resolve().parent
 
-# Input (JSONL originali)
+# Input (Original JSONL)
 INPUT_JSONL_DIR = BASE_DIR / 'Input'
 TRAIN_JSONL_FILE = INPUT_JSONL_DIR / 'train.jsonl'
 TEST_JSONL_FILE = INPUT_JSONL_DIR / 'test.jsonl'
 
-# Output FASE 0-4 (Tutti i dati processati)
+# Output PHASE 0-4 (All processed data)
 DATA_PIPELINE_DIR = BASE_DIR / 'CatBoost_Data_Pipeline'
 
-# Output FASE 3 e 5 (Analisi, grafici, nomi feature)
+# Output PHASE 3 and 5 (Analysis, plots, feature names)
 MODEL_OUTPUT_DIR = BASE_DIR / 'CatBoost_Model_Outputs'
 
-# Output FASE 6 (Submission finale)
+# Output PHASE 6 (Final submission)
 SUBMISSION_DIR = BASE_DIR / 'Submissions'
 OOF_DIR = BASE_DIR / 'OOF_Predictions'
 
-# --- Percorsi File Intermedi e Finali ---
-# FASE 0
+# --- Intermediate and Final File Paths ---
+# PHASE 0
 BATTLES_TRAIN_STATIC_CSV = DATA_PIPELINE_DIR / 'battles_train_static.csv'
 TIMELINES_TRAIN_DYNAMIC_CSV = DATA_PIPELINE_DIR / 'timelines_train_dynamic.csv'
 BATTLES_TEST_STATIC_CSV = DATA_PIPELINE_DIR / 'battles_test_static.csv'
 TIMELINES_TEST_DYNAMIC_CSV = DATA_PIPELINE_DIR / 'timelines_test_dynamic.csv'
 
-# FASE 1
+# PHASE 1
 TRAIN_FEATURES_FINAL_CSV = DATA_PIPELINE_DIR / 'features_final_train.csv'
 TEST_FEATURES_FINAL_CSV = DATA_PIPELINE_DIR / 'features_final_test.csv'
 
-# FASE 2
+# PHASE 2
 TRAIN_PROCESSED_CSV = DATA_PIPELINE_DIR / 'train_processed.csv'
 TEST_PROCESSED_CSV = DATA_PIPELINE_DIR / 'test_processed.csv'
 TARGET_TRAIN_CSV = DATA_PIPELINE_DIR / 'target_train.csv'
 
-# FASE 3
+# PHASE 3
 TRAIN_PROCESSED_SELECTED_CSV = DATA_PIPELINE_DIR / 'train_processed_selected.csv'
 TEST_PROCESSED_SELECTED_CSV = DATA_PIPELINE_DIR / 'test_processed_selected.csv'
 SELECTED_FEATURES_FILE = MODEL_OUTPUT_DIR / 'selected_feature_names.txt'
 RFECV_PLOT_FILE = MODEL_OUTPUT_DIR / 'rfecv_performance_curve.png'
 
-# FASE 4
+# PHASE 4
 X_TRAIN_SPLIT_FILE = DATA_PIPELINE_DIR / 'train_split_60_X.csv'
 Y_TRAIN_SPLIT_FILE = DATA_PIPELINE_DIR / 'train_split_60_y.csv'
 X_VAL_SPLIT_FILE = DATA_PIPELINE_DIR / 'validation_split_20_X.csv'
@@ -83,7 +83,7 @@ Y_VAL_SPLIT_FILE = DATA_PIPELINE_DIR / 'validation_split_20_y.csv'
 X_HOLDOUT_SPLIT_FILE = DATA_PIPELINE_DIR / 'holdout_split_20_X.csv'
 Y_HOLDOUT_SPLIT_FILE = DATA_PIPELINE_DIR / 'holdout_split_20_y.csv'
 
-# FASE 5
+# PHASE 5
 PARAMS_OUTPUT_FILE = MODEL_OUTPUT_DIR / 'best_catboost_params.json'
 ITERATION_OUTPUT_FILE = MODEL_OUTPUT_DIR / 'best_catboost_iteration.json'
 REPORT_TXT_FILE = MODEL_OUTPUT_DIR / 'validation_classification_report.txt'
@@ -93,13 +93,13 @@ LOSS_CURVE_FILE = MODEL_OUTPUT_DIR / 'validation_loss_curve.png'
 AUC_CURVE_FILE = MODEL_OUTPUT_DIR / 'validation_auc_learning_curve.png'
 ROC_CURVE_FILE = MODEL_OUTPUT_DIR / 'validation_roc_auc_curve.png'
 
-# FASE 6
+# PHASE 6
 SUBMISSION_FILE_CSV = SUBMISSION_DIR / 'submission_catboost_100pct_PROBA.csv'
 OOF_FILE_NPY = OOF_DIR / 'oof_catboost_proba.npy'
 TEST_PREDS_NPY_FILE = OOF_DIR / 'test_preds_catboost_proba.npy'
 
 
-# Costanti di Gioco
+# Game Constants
 TYPE_EFFECTIVENESS = {
     'normal': {'rock': 0.5, 'ghost': 0.0},
     'fire': {'fire': 0.5, 'water': 0.5, 'grass': 2.0, 'ice': 2.0, 'bug': 2.0, 'rock': 0.5, 'dragon': 0.5},
@@ -120,24 +120,24 @@ TYPE_EFFECTIVENESS = {
 }
 
 
-# --- 3. FUNZIONI HELPER (GENERALI) ---
+# --- 3. HELPER FUNCTIONS (GENERAL) ---
 
 def ensure_directories():
-    """Crea tutte le cartelle di output necessarie se non esistono."""
-    print("Verifica dell'esistenza delle cartelle di output...")
+    """Creates all necessary output folders if they don't exist."""
+    print("Verifying existence of output folders...")
     dirs_to_create = [
         INPUT_JSONL_DIR, DATA_PIPELINE_DIR, MODEL_OUTPUT_DIR,
         SUBMISSION_DIR, OOF_DIR
     ]
     for dir_path in dirs_to_create:
         os.makedirs(dir_path, exist_ok=True)
-    print("Cartelle verificate.")
+    print("Folders verified.")
 
 def get_effectiveness(move_type, target_types):
-    """Calcola l'efficacia per V3 (aggregati dinamici). Restituisce NAN per sconosciuti."""
+    """Calculates effectiveness for V3 (dynamic aggregates). Returns NAN for unknowns."""
     move_type_str = str(move_type).lower()
     if move_type_str in ['notype', 'none', 'nan'] or pd.isna(move_type):
-        return np.nan # <-- MODIFICA CRUCIALE: da 1.0 a np.nan
+        return np.nan # <-- CRUCIAL CHANGE: from 1.0 to np.nan
     
     effectiveness_map = TYPE_EFFECTIVENESS.get(move_type_str, {})
     
@@ -150,10 +150,10 @@ def get_effectiveness(move_type, target_types):
     return multiplier
 
 def get_effectiveness_static(move_type, target_types):
-    """Calcola l'efficacia per V2 e V6 (statica). Restituisce 1.0 per sconosciuti."""
+    """Calculates effectiveness for V2 and V6 (static). Returns 1.0 for unknowns."""
     move_type_str = str(move_type).lower()
     if move_type_str in ['notype', 'none', 'nan'] or pd.isna(move_type):
-        return 1.0 # Mantiene il comportamento 1.0
+        return 1.0 # Maintains 1.0 behavior
     
     effectiveness_map = TYPE_EFFECTIVENESS.get(move_type_str, {})
     
@@ -166,13 +166,13 @@ def get_effectiveness_static(move_type, target_types):
     return multiplier
 
 def build_pokedex():
-    """Costruisce un dizionario {nome: [tipo1, tipo2]} dai dati statici."""
-    print("Costruzione del Pokédex...")
+    """Builds a dictionary {name: [type1, type2]} from static data."""
+    print("Building Pokédex...")
     try:
         static_train_df = pd.read_csv(BATTLES_TRAIN_STATIC_CSV)
     except FileNotFoundError:
-        print(f"ERRORE: '{BATTLES_TRAIN_STATIC_CSV.name}' non trovato.")
-        print("Assicurati di aver eseguito la FASE 0 (run_00a_load_data).")
+        print(f"ERROR: '{BATTLES_TRAIN_STATIC_CSV.name}' not found.")
+        print("Ensure you have run PHASE 0 (run_00a_load_data).")
         return None
         
     pokedex = {}
@@ -194,13 +194,13 @@ def build_pokedex():
         if pd.notna(name) and name not in pokedex:
             pokedex[name] = [str(row['p2_lead.type1']).lower(), str(row['p2_lead.type2']).lower()]
 
-    print(f"Pokédex costruito. Contiene {len(pokedex)} Pokémon unici.")
+    print(f"Pokédex built. Contains {len(pokedex)} unique Pokémon.")
     return pokedex
 
-# --- 4. FUNZIONI HELPER (FEATURE ENGINEERING) ---
+# --- 4. HELPER FUNCTIONS (FEATURE ENGINEERING) ---
 
 def aggregate_battle_features(battle_turns_df):
-    """Helper per FE v1: Aggrega le feature dinamiche per una battaglia."""
+    """Helper for FE v1: Aggregates dynamic features for a single battle."""
     p1_damage = 0.0
     p2_damage = 0.0
     last_p1_hp = {}
@@ -283,7 +283,7 @@ def aggregate_battle_features(battle_turns_df):
     return pd.Series(results)
 
 def create_static_matchup_features(row):
-    """Helper per FE v2: Calcola vantaggio tipi statico lead-vs-lead."""
+    """Helper for FE v2: Calculates static lead-vs-lead type advantage."""
     p1_lead_types = [row.get('p1_team.0.type1'), row.get('p1_team.0.type2')]
     p2_lead_types = [row.get('p2_lead.type1'), row.get('p2_lead.type2')]
     
@@ -314,7 +314,7 @@ def create_static_matchup_features(row):
     return pd.Series([lead_offense_delta, team_counters], index=['lead_offense_delta', 'team_counters_vs_lead'])
 
 def create_team_aggregate_features(row):
-    """Helper per FE v6: Calcola statistiche aggregate del team p1."""
+    """Helper for FE v6: Calculates aggregated p1 team statistics."""
     team_stats = []
     team_types = set()
     
@@ -376,11 +376,11 @@ def create_team_aggregate_features(row):
     })
 
 
-# --- 5. FUNZIONI DELLA PIPELINE (FASE 0 - PRE-ANALISI) ---
+# --- 5. PIPELINE FUNCTIONS (PHASE 0 - PRE-ANALYSIS) ---
 
 def run_00a_load_data():
-    """FASE 0a: Carica JSONL e li converte in CSV statici e dinamici."""
-    print("\n--- Avvio 00a_load_data ---")
+    """PHASE 0a: Loads JSONL and converts them to static and dynamic CSVs."""
+    print("\n--- Starting 00a_load_data ---")
     
     def load_jsonl(filepath):
         data = []
@@ -390,9 +390,9 @@ def run_00a_load_data():
                     try:
                         data.append(json.loads(line))
                     except json.JSONDecodeError:
-                        print(f"Errore decodifica JSONL: {filepath}")
+                        print(f"JSONL decode error: {filepath}")
         except FileNotFoundError:
-            print(f"ERRORE: File non trovato: {filepath}")
+            print(f"ERROR: File not found: {filepath}")
             return None
         return data
 
@@ -422,44 +422,44 @@ def run_00a_load_data():
             processed_list.append(flat_battle)
         return pd.DataFrame(processed_list)
 
-    # Carica Train
-    print(f"Caricamento train data da {TRAIN_JSONL_FILE}...")
+    # Load Train
+    print(f"Loading train data from {TRAIN_JSONL_FILE}...")
     train_data_raw = load_jsonl(TRAIN_JSONL_FILE)
     if train_data_raw is None: return False
-    print(f"Caricati {len(train_data_raw)} training battles.")
+    print(f"Loaded {len(train_data_raw)} training battles.")
     
-    # Carica Test
-    print(f"Caricamento test data da {TEST_JSONL_FILE}...")
+    # Load Test
+    print(f"Loading test data from {TEST_JSONL_FILE}...")
     test_data_raw = load_jsonl(TEST_JSONL_FILE)
     if test_data_raw is None: return False
-    print(f"Caricati {len(test_data_raw)} test battles.")
+    print(f"Loaded {len(test_data_raw)} test battles.")
 
-    # Processa static
-    print("Creazione 'battles_df' (dati statici)...")
+    # Process static
+    print("Creating 'battles_df' (static data)...")
     battles_train_df = process_battles_data(train_data_raw)
     battles_test_df = process_battles_data(test_data_raw)
 
-    # Processa dinamico
-    print("Creazione 'timelines_df' (dati dinamici)...")
+    # Process dynamic
+    print("Creating 'timelines_df' (dynamic data)...")
     timelines_train_df = pd.json_normalize(train_data_raw, record_path='battle_timeline', meta=['battle_id'], errors='ignore')
     timelines_test_df = pd.json_normalize(test_data_raw, record_path='battle_timeline', meta=['battle_id'], errors='ignore')
 
-    # Salva CSV
-    print("\nSalvataggio DataFrames in CSV...")
+    # Save CSV
+    print("\nSaving DataFrames to CSV...")
     battles_train_df.to_csv(BATTLES_TRAIN_STATIC_CSV, index=False)
     timelines_train_df.to_csv(TIMELINES_TRAIN_DYNAMIC_CSV, index=False)
     battles_test_df.to_csv(BATTLES_TEST_STATIC_CSV, index=False)
     timelines_test_df.to_csv(TIMELINES_TEST_DYNAMIC_CSV, index=False)
 
-    print("Salvataggio completato.")
-    print(f"--- Completato 00a_load_data. File salvati in {DATA_PIPELINE_DIR} ---")
+    print("Save complete.")
+    print(f"--- Completed 00a_load_data. Files saved in {DATA_PIPELINE_DIR} ---")
     return True
 
 def run_00b_analyze_moves():
-    """FASE 0b: Analizza le mosse e restituisce un dict pulito."""
-    print("\n--- Avvio 00b_analyze_moves ---")
+    """PHASE 0b: Analyzes moves and returns a clean dict."""
+    print("\n--- Starting 00b_analyze_moves ---")
     
-    print("Analisi utilizzi e categorie mosse...")
+    print("Analyzing move usage and categories...")
     move_stats = defaultdict(lambda: {'total_uses': 0, 'effects': defaultdict(int)})
     move_categories = {}
     
@@ -510,17 +510,17 @@ def run_00b_analyze_moves():
                             if (p2_curr["boosts"] != p2_prev["boosts"] and any(p2_curr["boosts"][s] < p2_prev["boosts"][s] for s in p2_curr["boosts"])) and p1_move: move_stats[p1_move["name"]]['effects']['opponent_debuff'] += 1
                 
                 except json.JSONDecodeError: continue
-                except Exception as e: print(f"Errore parsing linea {line_number} in 00b: {e}")
+                except Exception as e: print(f"Error parsing line {line_number} in 00b: {e}")
 
     except FileNotFoundError:
-        print(f"ERRORE: File non trovato: {TRAIN_JSONL_FILE}")
+        print(f"ERROR: File not found: {TRAIN_JSONL_FILE}")
         return None
     except Exception as e:
-        print(f"ERRORE: Errore inatteso in 00b: {e}")
+        print(f"ERROR: Unexpected error in 00b: {e}")
         traceback.print_exc()
         return None
     
-    # Pulisci i conteggi grezzi per il filtro
+    # Clean up raw counts for filtering
     MOVE_STATS_RAW = {}
     for move, data in move_stats.items():
         MOVE_STATS_RAW[move] = {
@@ -528,10 +528,10 @@ def run_00b_analyze_moves():
             'effects': dict(data['effects'])  
         }
     MOVE_CATEGORIES = move_categories
-    print("Analisi conteggio mosse completata.")
+    print("Move count analysis complete.")
 
-    # Filtro effetti
-    print("Filtraggio effetti mosse...")
+    # Filter effects
+    print("Filtering move effects...")
     PRIMARY_THRESHOLD = 0.30 
     SECONDARY_THRESHOLD = 0.01 
     MIN_USES = 1
@@ -574,15 +574,15 @@ def run_00b_analyze_moves():
         if final_effects:
             final_move_effects[move_name] = sorted(list(final_effects))
     
-    print(f"Filtraggio mosse completato. {len(final_move_effects)} mosse processate.")
-    print("--- Completato 00b_analyze_moves ---")
+    print(f"Move filtering complete. {len(final_move_effects)} moves processed.")
+    print("--- Completed 00b_analyze_moves ---")
     return final_move_effects
 
 def run_00c_analyze_statuses():
-    """FASE 0c: Analizza e restituisce un set di status negativi."""
-    print("\n--- Avvio 00c_analyze_statuses ---")
+    """PHASE 0c: Analyzes and returns a set of negative statuses."""
+    print("\n--- Starting 00c_analyze_statuses ---")
     NEGATIVE_STATUSES = set()
-    print(f"Avvio analisi status da: {TRAIN_JSONL_FILE}")
+    print(f"Starting status analysis from: {TRAIN_JSONL_FILE}")
 
     try:
         with open(TRAIN_JSONL_FILE, 'r', encoding='utf-8') as f:
@@ -602,26 +602,26 @@ def run_00c_analyze_statuses():
                             if p2_state.get("status") not in ['fnt', 'nostatus']:
                                 NEGATIVE_STATUSES.add(p2_state["status"])
                 except json.JSONDecodeError: continue
-                except Exception as e: print(f"Errore processing linea {line_number+1} in 00c: {e}")
+                except Exception as e: print(f"Error processing line {line_number+1} in 00c: {e}")
     
-        print(f"Analisi status completata. Trovati {len(NEGATIVE_STATUSES)} status negativi.")
-        print(f"Status trovati: {NEGATIVE_STATUSES}")
-        print("--- Completato 00c_analyze_statuses ---")
-        return list(NEGATIVE_STATUSES) # Ritorna una lista
+        print(f"Status analysis complete. Found {len(NEGATIVE_STATUSES)} negative statuses.")
+        print(f"Statuses found: {NEGATIVE_STATUSES}")
+        print("--- Completed 00c_analyze_statuses ---")
+        return list(NEGATIVE_STATUSES) # Return a list
 
     except FileNotFoundError:
-        print(f"ERRORE: File non trovato: '{TRAIN_JSONL_FILE}'")
+        print(f"ERROR: File not found: '{TRAIN_JSONL_FILE}'")
         return None
     except Exception as e:
-        print(f"ERRORE: Errore generale in 00c: {e}")
+        print(f"ERROR: General error in 00c: {e}")
         return None
 
 
-# --- 6. FUNZIONI DELLA PIPELINE (FASE 1 - FEATURE ENGINEERING) ---
+# --- 6. PIPELINE FUNCTIONS (PHASE 1 - FEATURE ENGINEERING) ---
 
 def run_01_feature_engineering_v1(battles_df, timelines_df):
-    """FASE 1a: Crea feature dinamiche base (v1)."""
-    print("\n--- Avvio 01_feature_engineering_v1 ---")
+    """PHASE 1a: Creates basic dynamic features (v1)."""
+    print("\n--- Starting 01_feature_engineering_v1 ---")
     
     timelines_df = timelines_df.sort_values(by=['battle_id', 'turn'])
     
@@ -631,9 +631,9 @@ def run_01_feature_engineering_v1(battles_df, timelines_df):
     timelines_df['p1_boosts_sum_turn'] = timelines_df[boost_cols_p1].sum(axis=1)
     timelines_df['p2_boosts_sum_turn'] = timelines_df[boost_cols_p2].sum(axis=1)
 
-    print("Avvio aggregazione feature dinamiche (v1)...")
+    print("Starting aggregation of dynamic features (v1)...")
     dynamic_features_df = timelines_df.groupby('battle_id').apply(aggregate_battle_features)
-    print("Aggregazione v1 completata.")
+    print("Aggregation v1 complete.")
 
     dynamic_features_df['faint_delta'] = dynamic_features_df['p1_fainted_count'] - dynamic_features_df['p2_fainted_count']
     dynamic_features_df['hp_avg_delta'] = dynamic_features_df['p1_avg_hp_pct'] - dynamic_features_df['p2_avg_hp_pct']
@@ -641,37 +641,37 @@ def run_01_feature_engineering_v1(battles_df, timelines_df):
     dynamic_features_df['total_boosts_delta'] = dynamic_features_df['p1_total_boosts'] - dynamic_features_df['p2_total_boosts']
     dynamic_features_df['comeback_kos_delta'] = dynamic_features_df['p1_comeback_kos'] - dynamic_features_df['p2_comeback_kos']
 
-    print("Merge dati statici e dinamici (v1)...")
+    print("Merging static and dynamic data (v1)...")
     features_df = pd.merge(
         battles_df, 
         dynamic_features_df, 
         on='battle_id', 
         how='left'
     )
-    print(f"Feature v1 DF creato con {features_df.shape[1]} colonne.")
-    print("--- Completato 01_feature_engineering_v1 ---")
+    print(f"Feature v1 DF created with {features_df.shape[1]} columns.")
+    print("--- Completed 01_feature_engineering_v1 ---")
     return features_df
 
 def run_02_feature_engineering_v2(features_df):
-    """FASE 1b: Aggiunge matchup statici (v2)."""
-    print("\n--- Avvio 02_feature_engineering_v2 ---")
-    print("Avvio calcolo feature statiche vantaggio tipi (v2)...")
+    """PHASE 1b: Adds static matchups (v2)."""
+    print("\n--- Starting 02_feature_engineering_v2 ---")
+    print("Starting calculation of static type advantage features (v2)...")
     
     new_features = features_df.apply(create_static_matchup_features, axis=1)
     features_df_v2 = pd.concat([features_df, new_features], axis=1)
     
-    print(f"Features v2 aggiunte. Totale colonne: {features_df_v2.shape[1]}")
-    print("--- Completato 02_feature_engineering_v2 ---")
+    print(f"Features v2 added. Total columns: {features_df_v2.shape[1]}")
+    print("--- Completed 02_feature_engineering_v2 ---")
     return features_df_v2
 
 def run_03_feature_engineering_v3(features_df_v2, timelines_df, pokedex):
-    """FASE 1c: Aggiunge efficacia tipi dinamica (v3)."""
-    print("\n--- Avvio 03_feature_engineering_v3 ---")
+    """PHASE 1c: Adds dynamic type effectiveness (v3)."""
+    print("\n--- Starting 03_feature_engineering_v3 ---")
     if pokedex is None:
-        print("ERRORE (v3): Pokedex non fornito. Salto la fase.")
+        print("ERROR (v3): Pokédex not provided. Skipping phase.")
         return features_df_v2
         
-    print("Avvio calcolo efficacia dinamica (v3)...")
+    print("Starting dynamic effectiveness calculation (v3)...")
     
     timelines_df['p1_active_types'] = timelines_df['p1_pokemon_state.name'].apply(lambda x: pokedex.get(x, [None, None]))
     timelines_df['p2_active_types'] = timelines_df['p2_pokemon_state.name'].apply(lambda x: pokedex.get(x, [None, None]))
@@ -681,7 +681,7 @@ def run_03_feature_engineering_v3(features_df_v2, timelines_df, pokedex):
             lambda row: get_effectiveness(row['p1_move_details.type'], row['p2_active_types']), axis=1
         )
     else:
-        print("ATTENZIONE: Colonna 'p1_move_details.type' non trovata. Salto p1_move_effectiveness.")
+        print("WARNING: Column 'p1_move_details.type' not found. Skipping p1_move_effectiveness.")
         timelines_df['p1_move_effectiveness'] = np.nan
 
     if 'p2_move_details.type' in timelines_df.columns:
@@ -689,10 +689,10 @@ def run_03_feature_engineering_v3(features_df_v2, timelines_df, pokedex):
             lambda row: get_effectiveness(row['p2_move_details.type'], row['p1_active_types']), axis=1
         )
     else:
-        print("ATTENZIONE: Colonna 'p2_move_details.type' non trovata. Salto p2_move_effectiveness.")
+        print("WARNING: Column 'p2_move_details.type' not found. Skipping p2_move_effectiveness.")
         timelines_df['p2_move_effectiveness'] = np.nan
     
-    print("Calcolo efficacia completato. Avvio aggregazione (v3)...")
+    print("Effectiveness calculation complete. Starting aggregation (v3)...")
     
     aggregations = {
         'p1_move_effectiveness': ['mean', lambda x: (x > 1.0).sum(), lambda x: (x < 1.0).sum()],
@@ -709,23 +709,23 @@ def run_03_feature_engineering_v3(features_df_v2, timelines_df, pokedex):
     dynamic_type_features['p2_avg_effectiveness'] = dynamic_type_features['p2_avg_effectiveness'].fillna(1.0)
     dynamic_type_features = dynamic_type_features.fillna(0)
 
-    print("Merge v2 con feature v3...")
+    print("Merging v2 with v3 features...")
     features_df_v3 = pd.merge(features_df_v2, dynamic_type_features, on='battle_id', how='left')
-    print(f"Features v3 aggiunte. Totale colonne: {features_df_v3.shape[1]}")
-    print("--- Completato 03_feature_engineering_v3 ---")
+    print(f"Features v3 added. Total columns: {features_df_v3.shape[1]}")
+    print("--- Completed 03_feature_engineering_v3 ---")
     return features_df_v3
 
 def run_04_feature_engineering_v4(features_df_v3, timelines_df, statuses: list):
-    """FASE 1d: Aggiunge feature di status (v4)."""
-    print("\n--- Avvio 04_feature_engineering_v4 ---")
+    """PHASE 1d: Adds status features (v4)."""
+    print("\n--- Starting 04_feature_engineering_v4 ---")
     
     if not statuses:
-        print("ATTENZIONE (v4): Lista 'statuses' vuota. Le feature di status saranno 0.")
+        print("WARNING (v4): 'statuses' list is empty. Status features will be 0.")
         
-    print("Avvio calcolo feature di status (v4)...")
+    print("Starting status feature calculation (v4)...")
     
     NEGATIVE_STATUSES = statuses
-    timeline_df = timelines_df.copy() # Evita SettingWithCopyWarning
+    timeline_df = timelines_df.copy() # Avoids SettingWithCopyWarning
     timeline_df['p1_has_status_turn'] = timeline_df['p1_pokemon_state.status'].isin(NEGATIVE_STATUSES)
     timeline_df['p2_has_status_turn'] = timeline_df['p2_pokemon_state.status'].isin(NEGATIVE_STATUSES)
 
@@ -743,21 +743,21 @@ def run_04_feature_engineering_v4(features_df_v3, timelines_df, statuses: list):
         status_features_df['p1_total_status_turns'] - status_features_df['p2_total_status_turns']
     )
 
-    print("Merge v3 con feature v4...")
+    print("Merging v3 with v4 features...")
     features_df_v4 = pd.merge(features_df_v3, status_features_df, on='battle_id', how='left')
-    print(f"Features v4 aggiunte. Totale colonne: {features_df_v4.shape[1]}")
-    print("--- Completato 04_feature_engineering_v4 ---")
+    print(f"Features v4 added. Total columns: {features_df_v4.shape[1]}")
+    print("--- Completed 04_feature_engineering_v4 ---")
     return features_df_v4
 
 def run_05_feature_engineering_v5(features_df_v4, timelines_df, pokedex, move_effects: dict):
-    """FASE 1e: Aggiunge feature esperte (STAB, etc.) (v5)."""
-    print("\n--- Avvio 05_feature_engineering_v5 ---")
+    """PHASE 1e: Adds expert features (STAB, etc.) (v5)."""
+    print("\n--- Starting 05_feature_engineering_v5 ---")
     
     STATUS_MOVES = []
     HEALING_MOVES = []
 
     if not move_effects:
-        print("ATTENZIONE (v5): 'move_effects' è vuoto. STAB/Healing features saranno 0.")
+        print("WARNING (v5): 'move_effects' is empty. STAB/Healing features will be 0.")
     else:
         for move_name, effects_list in move_effects.items():
             if 'opponent_status' in effects_list:
@@ -765,7 +765,7 @@ def run_05_feature_engineering_v5(features_df_v4, timelines_df, pokedex, move_ef
             if 'healing' in effects_list:
                 HEALING_MOVES.append(move_name)
 
-    print("Avvio calcolo feature esperte (v5)...")
+    print("Starting expert feature calculation (v5)...")
     timeline_df = timelines_df.copy()
     timeline_df['p1_active_types'] = timeline_df['p1_pokemon_state.name'].apply(lambda x: pokedex.get(x, [None, None]))
     timeline_df['p2_active_types'] = timeline_df['p2_pokemon_state.name'].apply(lambda x: pokedex.get(x, [None, None]))
@@ -792,7 +792,7 @@ def run_05_feature_engineering_v5(features_df_v4, timelines_df, pokedex, move_ef
             p2_is_status_move, p2_is_healing_move
         ])
 
-    print("... applicazione calcoli per-turno (v5)...")
+    print("... applying per-turn calculations (v5)...")
     new_features_per_turn = timeline_df.apply(calculate_turn_features, axis=1)
     new_features_per_turn.columns = [
         'p1_is_stab', 'p2_is_stab',
@@ -801,7 +801,7 @@ def run_05_feature_engineering_v5(features_df_v4, timelines_df, pokedex, move_ef
     ]
     timeline_df = pd.concat([timeline_df, new_features_per_turn], axis=1)
     
-    print("Calcolo per-turno completato. Avvio aggregazione (v5)...")
+    print("Per-turn calculation complete. Starting aggregation (v5)...")
     aggregations = {
         'p1_is_stab': 'sum', 'p2_is_stab': 'sum',
         'p1_is_status_move': 'sum', 'p1_is_healing_move': 'sum',
@@ -819,42 +819,42 @@ def run_05_feature_engineering_v5(features_df_v4, timelines_df, pokedex, move_ef
     expert_features_df['status_move_delta'] = expert_features_df['p1_status_move_count'] - expert_features_df['p2_status_move_count']
     expert_features_df['healing_move_delta'] = expert_features_df['p1_healing_move_count'] - expert_features_df['p2_healing_move_count']
 
-    print("Merge v4 con feature v5...")
+    print("Merging v4 with v5 features...")
     features_df_v5 = pd.merge(features_df_v4, expert_features_df, on='battle_id', how='left')
-    print(f"Features v5 aggiunte. Totale colonne: {features_df_v5.shape[1]}")
-    print("--- Completato 05_feature_engineering_v5 ---")
+    print(f"Features v5 added. Total columns: {features_df_v5.shape[1]}")
+    print("--- Completed 05_feature_engineering_v5 ---")
     return features_df_v5
 
 def run_06_feature_engineering_v6(features_df_v5):
-    """FASE 1f: Aggiunge statistiche aggregate del team (v6)."""
-    print("\n--- Avvio 06_feature_engineering_v6 ---")
-    print("Avvio calcolo feature statiche di squadra (v6)...")
+    """PHASE 1f: Adds aggregated team statistics (v6)."""
+    print("\n--- Starting 06_feature_engineering_v6 ---")
+    print("Starting calculation of static team features (v6)...")
     
     new_features = features_df_v5.apply(create_team_aggregate_features, axis=1)
     features_df_v6 = pd.concat([features_df_v5, new_features], axis=1)
     
-    print(f"Features v6 aggiunte. Totale colonne: {features_df_v6.shape[1]}")
-    print("--- Completato 06_feature_engineering_v6 ---")
+    print(f"Features v6 added. Total columns: {features_df_v6.shape[1]}")
+    print("--- Completed 06_feature_engineering_v6 ---")
     return features_df_v6
 
-# --- 7. FUNZIONI DELLA PIPELINE (FASE 2, 3, 4 - PREPROCESSING E SPLIT) ---
+# --- 7. PIPELINE FUNCTIONS (PHASE 2, 3, 4 - PREPROCESSING AND SPLIT) ---
 
 def run_07_preprocessing():
-    """FASE 2: Esegue OHE, Imputing, Scaling."""
-    print("\n--- Avvio 07_preprocessing ---")
+    """PHASE 2: Performs OHE, Imputing, Scaling."""
+    print("\n--- Starting 07_preprocessing ---")
 
     try:
         train_df = pd.read_csv(TRAIN_FEATURES_FINAL_CSV)
         test_df = pd.read_csv(TEST_FEATURES_FINAL_CSV)
-        print("Dati caricati.")
+        print("Data loaded.")
     except FileNotFoundError as e:
-        print(f"ERRORE: File feature non trovati: {e}")
-        print("Assicurati di aver eseguito la FASE 1.")
+        print(f"ERROR: Feature files not found: {e}")
+        print("Ensure you have run PHASE 1.")
         return False
 
     y_train = train_df['player_won']
     y_train.to_csv(TARGET_TRAIN_CSV, index=False, header=True)
-    print(f"Salvataggio {TARGET_TRAIN_CSV.name}...")
+    print(f"Saving {TARGET_TRAIN_CSV.name}...")
 
     train_df = train_df.drop(columns=['player_won', 'battle_id']) 
     test_df = test_df.drop(columns=['battle_id', 'player_won'])
@@ -862,7 +862,7 @@ def run_07_preprocessing():
     test_df['is_train'] = 0
 
     combined_df = pd.concat([train_df, test_df], ignore_index=True)
-    print(f"DataFrame combinato creato con {combined_df.shape[0]} righe.")
+    print(f"Combined DataFrame created with {combined_df.shape[0]} rows.")
 
     categorical_features = ['p2_lead.name', 'p2_lead.type1', 'p2_lead.type2']
     for i in range(6):
@@ -873,50 +873,50 @@ def run_07_preprocessing():
     categorical_features = [col for col in categorical_features if col in combined_df.columns]
     numeric_features = [col for col in combined_df.columns if col not in categorical_features and col != 'is_train']
     
-    print(f"Trovate {len(numeric_features)} feature numeriche.")
-    print(f"Trovate {len(categorical_features)} feature categoriche.")
+    print(f"Found {len(numeric_features)} numeric features.")
+    print(f"Found {len(categorical_features)} categorical features.")
 
-    print("Esecuzione One-Hot Encoding (pd.get_dummies)...")
+    print("Executing One-Hot Encoding (pd.get_dummies)...")
     processed_df = pd.get_dummies(
         combined_df, 
         columns=categorical_features, 
         dummy_na=False, 
         drop_first=False
     )
-    print(f"DataFrame trasformato in {processed_df.shape[1]} colonne totali.")
+    print(f"DataFrame transformed to {processed_df.shape[1]} total columns.")
 
-    print("Applicazione SimpleImputer e StandardScaler alle feature numeriche...")
+    print("Applying SimpleImputer and StandardScaler to numeric features...")
     numeric_imputer = SimpleImputer(strategy='median')
     processed_df[numeric_features] = numeric_imputer.fit_transform(processed_df[numeric_features])
 
     scaler = StandardScaler()
     processed_df[numeric_features] = scaler.fit_transform(processed_df[numeric_features])
-    print("Imputazione e scaling completati.")
+    print("Imputation and scaling complete.")
 
-    print("Separazione set Train e Test processati...")
+    print("Separating processed Train and Test sets...")
     X_train_processed = processed_df[processed_df['is_train'] == 1].drop(columns=['is_train'])
     X_test_processed = processed_df[processed_df['is_train'] == 0].drop(columns=['is_train'])
 
-    print(f"Salvataggio {TRAIN_PROCESSED_CSV.name}...")
+    print(f"Saving {TRAIN_PROCESSED_CSV.name}...")
     X_train_processed.to_csv(TRAIN_PROCESSED_CSV, index=False)
-    print(f"Salvataggio {TEST_PROCESSED_CSV.name}...")
+    print(f"Saving {TEST_PROCESSED_CSV.name}...")
     X_test_processed.to_csv(TEST_PROCESSED_CSV, index=False)
 
-    print("--- Completato 07_preprocessing ---")
+    print("--- Completed 07_preprocessing ---")
     return True
 
 def run_08_feature_selection():
-    """FASE 3: Esegue RFECV (se RUN_FEATURE_SELECTION=True) o carica i risultati (se False)."""
+    """PHASE 3: Runs RFECV (if RUN_FEATURE_SELECTION=True) or loads results (if False)."""
     
-    # Legge la variabile globale definita nella Sezione 2
+    # Reads the global variable defined in Section 2
     global RUN_FEATURE_SELECTION 
     
     if not RUN_FEATURE_SELECTION:
-        print("\n--- Avvio 08_feature_selection (Modalità: Caricamento) ---")
-        print("RUN_FEATURE_SELECTION è False. Salto RFECV.")
-        print("Verifico l'esistenza dei file delle feature selezionate...")
+        print("\n--- Starting 08_feature_selection (Mode: Load) ---")
+        print("RUN_FEATURE_SELECTION is False. Skipping RFECV.")
+        print("Checking for existence of selected feature files...")
         
-        # Controlla se i file che RFECV avrebbe dovuto creare esistono
+        # Check if the files RFECV would have created already exist
         required_files = [
             TRAIN_PROCESSED_SELECTED_CSV,
             TEST_PROCESSED_SELECTED_CSV,
@@ -926,58 +926,58 @@ def run_08_feature_selection():
         all_files_found = True
         for file_path in required_files:
             if not os.path.exists(file_path):
-                print(f"\033[91mERRORE: File richiesto non trovato: {file_path}\033[0m")
+                print(f"\033[91mERROR: Required file not found: {file_path}\033[0m")
                 all_files_found = False
         
         if all_files_found:
-            print("\033[92mSuccesso: Tutti i file delle feature selezionate sono presenti.\033[0m")
-            print(f"I dati verranno letti da: {TRAIN_PROCESSED_SELECTED_CSV.name}")
-            print("--- Completato 08_feature_selection (Caricamento) ---")
+            print("\033[92mSuccess: All selected feature files are present.\033[0m")
+            print(f"Data will be read from: {TRAIN_PROCESSED_SELECTED_CSV.name}")
+            print("--- Completed 08_feature_selection (Load) ---")
             return True
         else:
-            print("\nERRORE: Per saltare RFECV, i file '..._selected.csv' e '...names.txt' devono esistere.")
-            print(f"Esegui la pipeline una volta con RUN_FEATURE_SELECTION=True")
-            print(f"o posiziona i file manualmente in {DATA_PIPELINE_DIR} e {MODEL_OUTPUT_DIR}.")
+            print("\nERROR: To skip RFECV, the '..._selected.csv' and '...names.txt' files must exist.")
+            print(f"Run the pipeline once with RUN_FEATURE_SELECTION=True")
+            print(f"or place the files manually in {DATA_PIPELINE_DIR} and {MODEL_OUTPUT_DIR}.")
             return False
     
-    # --- ELSE: ESEGUI RFECV ---
-    print("\n--- Avvio 08_feature_selection (Modalità: Esecuzione RFECV) ---")
-    print("RUN_FEATURE_SELECTION è True. Avvio processo RFECV...")
+    # --- ELSE: RUN RFECV ---
+    print("\n--- Starting 08_feature_selection (Mode: Run RFECV) ---")
+    print("RUN_FEATURE_SELECTION is True. Starting RFECV process...")
     
     try:
-        print(f"Caricamento dati da {DATA_PIPELINE_DIR}...")
+        print(f"Loading data from {DATA_PIPELINE_DIR}...")
         X_train_full = pd.read_csv(TRAIN_PROCESSED_CSV)
         y_train_full = pd.read_csv(TARGET_TRAIN_CSV).values.ravel()
         X_test_kaggle = pd.read_csv(TEST_PROCESSED_CSV)
         original_feature_names = X_train_full.columns
-        print(f"Dati caricati: X_train_full {X_train_full.shape}, X_test_kaggle {X_test_kaggle.shape}")
+        print(f"Data loaded: X_train_full {X_train_full.shape}, X_test_kaggle {X_test_kaggle.shape}")
     except FileNotFoundError as e:
-        print(f"ERRORE: File processati non trovati in '{DATA_PIPELINE_DIR}'.")
+        print(f"ERROR: Processed files not found in '{DATA_PIPELINE_DIR}'.")
         print(e)
         return False
 
-    print("Avvio addestramento selettore RFECV con CatBoost...")
-    print("Stimatore: n_estimators=500, depth=7.")
+    print("Starting RFECV selector training with CatBoost...")
+    print("Estimator: n_estimators=500, depth=7.")
     estimator = CatBoostClassifier(
         n_estimators=500, depth=7, random_seed=42, verbose=0, thread_count=-1
     )
     cv_strategy = KFold(n_splits=5, shuffle=True, random_state=42)
-    print("Strategia CV: KFold a 5 split.")
+    print("CV Strategy: 5-Fold KFold.")
 
-    print("Avvio di RFECV.fit()... Questo processo sarà LUNGO.")
+    print("Starting RFECV.fit()... This process will be LONG.")
     selector = RFECV(
         estimator, cv=cv_strategy, scoring='roc_auc', step=10, 
         min_features_to_select=50, n_jobs=-1, verbose=2
     )
     
     selector.fit(X_train_full, y_train_full)
-    print("Addestramento RFECV completato.")
+    print("RFECV training complete.")
 
-    print("Applicazione trasformazione RFECV...")
+    print("Applying RFECV transformation...")
     X_train_selected = selector.transform(X_train_full)
     X_test_selected = selector.transform(X_test_kaggle)
     optimal_count = selector.n_features_
-    print(f"Selezione completata. NUMERO OTTIMALE DI FEATURE: {optimal_count}")
+    print(f"Selection complete. OPTIMAL NUMBER OF FEATURES: {optimal_count}")
 
     selected_mask = selector.get_support()
     selected_features = original_feature_names[selected_mask]
@@ -987,12 +987,12 @@ def run_08_feature_selection():
 
     X_train_selected_df.to_csv(TRAIN_PROCESSED_SELECTED_CSV, index=False)
     X_test_selected_df.to_csv(TEST_PROCESSED_SELECTED_CSV, index=False)
-    print(f"\nDati selezionati salvati in -> {DATA_PIPELINE_DIR}")
+    print(f"\nSelected data saved in -> {DATA_PIPELINE_DIR}")
 
     pd.Series(selected_features).to_csv(SELECTED_FEATURES_FILE, index=False, header=False)
-    print(f"Nomi feature salvati in -> {SELECTED_FEATURES_FILE}")
+    print(f"Feature names saved in -> {SELECTED_FEATURES_FILE}")
 
-    print("\nSalvataggio grafico performance RFECV...")
+    print("\nSaving RFECV performance plot...")
     try:
         scores = selector.cv_results_['mean_test_score']
         n_features_tested = selector.cv_results_['n_features']
@@ -1002,36 +1002,36 @@ def run_08_feature_selection():
         best_score = np.max(scores)
         best_n_features = n_features_tested[np.argmax(scores)]
         plt.axvline(x=best_n_features, color='red', linestyle='--', 
-                    label=f'Ottimo: {best_n_features} features (AUC: {best_score:.4f})')
-        plt.title('Performance RFECV vs. Numero di Feature')
-        plt.xlabel('Numero di Feature Selezionate')
-        plt.ylabel('Punteggio CV (roc_auc)')
+                    label=f'Optimal: {best_n_features} features (AUC: {best_score:.4f})')
+        plt.title('RFECV Performance vs. Number of Features')
+        plt.xlabel('Number of Features Selected')
+        plt.ylabel('CV Score (roc_auc)')
         plt.legend()
         plt.grid(True)
         plt.gca().invert_xaxis()
         plt.savefig(RFECV_PLOT_FILE)
         plt.close()
-        print(f"Grafico performance RFECV salvato in: {RFECV_PLOT_FILE}")
+        print(f"RFECV performance plot saved to: {RFECV_PLOT_FILE}")
     except Exception as e:
-        print(f"Errore durante la creazione del grafico: {e}")
+        print(f"Error during plot creation: {e}")
 
-    print("--- Completato 08_feature_selection (Esecuzione RFECV) ---")
+    print("--- Completed 08_feature_selection (Run RFECV) ---")
     return True
 
 def run_09_data_splitter():
-    """FASE 4: Divide i dati selezionati in 60/20/20."""
-    print("\n--- Avvio 09_data_splitter ---")
+    """PHASE 4: Splits the selected data into 60/20/20."""
+    print("\n--- Starting 09_data_splitter ---")
     
-    print("Avvio Script di divisione 60/20/20...")
+    print("Starting 60/20/20 split script...")
     try:
         X = pd.read_csv(TRAIN_PROCESSED_SELECTED_CSV)
         y = pd.read_csv(TARGET_TRAIN_CSV) 
     except FileNotFoundError:
-        print(f"ERRORE: File non trovati in {DATA_PIPELINE_DIR}.")
+        print(f"ERROR: Files not found in {DATA_PIPELINE_DIR}.")
         return False
 
-    print(f"Dati caricati: {len(X)} campioni.")
-    print("Divisione 60/20/20 (Train/Validation/Holdout)...")
+    print(f"Data loaded: {len(X)} samples.")
+    print("Splitting 60/20/20 (Train/Validation/Holdout)...")
 
     X_temp, X_holdout, y_temp, y_holdout = train_test_split(
         X, y, test_size=0.20, random_state=42, stratify=y
@@ -1040,11 +1040,11 @@ def run_09_data_splitter():
         X_temp, y_temp, test_size=0.25, random_state=84, stratify=y_temp
     )
 
-    print(f"  Training set (60%): {len(X_train)} campioni")
-    print(f"  Validation set (20%): {len(X_val)} campioni")
-    print(f"  Holdout set (20%): {len(X_holdout)} campioni")
+    print(f"  Training set (60%): {len(X_train)} samples")
+    print(f"  Validation set (20%): {len(X_val)} samples")
+    print(f"  Holdout set (20%): {len(X_holdout)} samples")
 
-    print(f"Salvataggio degli split in {DATA_PIPELINE_DIR}...")
+    print(f"Saving splits to {DATA_PIPELINE_DIR}...")
     X_train.to_csv(X_TRAIN_SPLIT_FILE, index=False)
     y_train.to_csv(Y_TRAIN_SPLIT_FILE, index=False)
     X_val.to_csv(X_VAL_SPLIT_FILE, index=False)
@@ -1052,23 +1052,23 @@ def run_09_data_splitter():
     X_holdout.to_csv(X_HOLDOUT_SPLIT_FILE, index=False)
     y_holdout.to_csv(Y_HOLDOUT_SPLIT_FILE, index=False)
 
-    print(f"Salvataggio completato nella cartella: {DATA_PIPELINE_DIR}")
-    print("--- Completato 09_data_splitter ---")
+    print(f"Save complete in folder: {DATA_PIPELINE_DIR}")
+    print("--- Completed 09_data_splitter ---")
     return True
 
 
-# --- 8. FUNZIONI DELLA PIPELINE (FASE 5 e 6 - TRAINING E SUBMISSION) ---
+# --- 8. PIPELINE FUNCTIONS (PHASE 5 & 6 - TRAINING AND SUBMISSION) ---
 
 def run_10_optimize_and_validate(run_grid_search=False):
     """
-    FASE 5: Esegue l'ottimizzazione (opzionale) e la validazione sul 20% holdout.
-    Salva i parametri, i report e i grafici.
+    PHASE 5: Performs optimization (optional) and validation on the 20% holdout.
+    Saves parameters, reports, and plots.
     """
     print("\n" + "="*30)
-    print("INIZIO FASE 5: Ottimizzazione e Validazione")
+    print("START PHASE 5: Optimization and Validation")
     print("="*30)
 
-    print("Caricamento 60% Train e 20% Validation data...")
+    print("Loading 60% Train and 20% Validation data...")
     try:
         X_train = pd.read_csv(X_TRAIN_SPLIT_FILE)
         y_train = pd.read_csv(Y_TRAIN_SPLIT_FILE).values.ravel()
@@ -1078,22 +1078,22 @@ def run_10_optimize_and_validate(run_grid_search=False):
         best_params_clean = {}
         if not run_grid_search:
             if os.path.exists(PARAMS_OUTPUT_FILE):
-                print(f"Caricamento parametri esistenti da {PARAMS_OUTPUT_FILE}...")
+                print(f"Loading existing parameters from {PARAMS_OUTPUT_FILE}...")
                 with open(PARAMS_OUTPUT_FILE, 'r') as f:
                     best_params_clean = json.load(f)
             else:
-                print("ATTENZIONE: run_grid_search=False ma file parametri non trovato. Saranno usati i default.")
+                print("WARNING: run_grid_search=False but parameter file not found. Defaults will be used.")
         else:
-            print("run_grid_search=True. I parametri esistenti saranno sovrascritti.")
+            print("run_grid_search=True. Existing parameters will be overwritten.")
 
     except FileNotFoundError as e:
-        print(f"ERRORE: File non trovati in {DATA_PIPELINE_DIR}.")
+        print(f"ERROR: Files not found in {DATA_PIPELINE_DIR}.")
         print(e)
-        print("Assicurati di aver eseguito le Fasi 0-4 (pipeline dati).")
+        print("Ensure you have run Phases 0-4 (data pipeline).")
         return False
 
     if run_grid_search:
-        print(f"\nFase 5.1: Avvio GridSearchCV (su 60% Train):\n")
+        print(f"\nPhase 5.1: Starting GridSearchCV (on 60% Train):\n")
         start_time = time.time()
         param_grid = {
             'learning_rate': [0.01, 0.02, 0.03, 0.05, 0.1, 0.15, 0.2],
@@ -1103,8 +1103,8 @@ def run_10_optimize_and_validate(run_grid_search=False):
         
         combinations = 1
         for k in param_grid: combinations *= len(param_grid[k])
-        print(f"Parametri GridSearch da testare: {param_grid}")
-        print(f"Combinazioni totali: {combinations}. CV Folds: 5. Fit totali: {combinations * 5}")
+        print(f"GridSearch parameters to test: {param_grid}")
+        print(f"Total combinations: {combinations}. CV Folds: 5. Total fits: {combinations * 5}")
 
         base_model = CatBoostClassifier(
             objective='Logloss', eval_metric='AUC', verbose=0,
@@ -1117,14 +1117,14 @@ def run_10_optimize_and_validate(run_grid_search=False):
         )
         grid_search.fit(X_train, y_train)
         end_time = time.time()
-        print(f"GridSearch completato in {end_time - start_time:.2f} secondi.")
+        print(f"GridSearch completed in {end_time - start_time:.2f} seconds.")
 
         best_params_clean = grid_search.best_params_
         best_score_clean = grid_search.best_score_
-        print(f"\nMiglior AUC Score (CV su 60%): {best_score_clean:.6f}")
-        print(f"Migliori Parametri trovati: {best_params_clean}")
+        print(f"\nBest AUC Score (CV on 60%): {best_score_clean:.6f}")
+        print(f"Best Parameters found: {best_params_clean}")
 
-        # Salva i parametri
+        # Save parameters
         final_params_to_save = {
             **best_params_clean,
             'objective': 'Logloss', 'eval_metric': 'AUC',
@@ -1132,50 +1132,50 @@ def run_10_optimize_and_validate(run_grid_search=False):
         }
         with open(PARAMS_OUTPUT_FILE, 'w') as f:
             json.dump(final_params_to_save, f, indent=2)
-        print(f"Parametri salvati in: {PARAMS_OUTPUT_FILE}")
+        print(f"Parameters saved to: {PARAMS_OUTPUT_FILE}")
         best_params_clean = final_params_to_save
 
     else:
-        print(f"\nFase 5.1: Ottimizzazione GridSearchCV saltata (run_grid_search=False):\n")
+        print(f"\nPhase 5.1: GridSearchCV skipped (run_grid_search=False):\n")
         if not best_params_clean:
-            print("Nessun parametro trovato, uso default di CatBoost.")
+            print("No parameters found, using CatBoost defaults.")
             best_params_clean = {'objective': 'Logloss', 'eval_metric': 'AUC', 'verbose': 0, 'random_seed': 42}
 
-    print("\nFase 5.2: Training su 60% e Diagnostica su 20% (Validation):\n")
+    print("\nPhase 5.2: Training on 60% and Diagnostics on 20% (Validation):\n")
 
     loaded_iteration = None
     if os.path.exists(ITERATION_OUTPUT_FILE):
-        print(f"Trovato file iterazioni esistente: {ITERATION_OUTPUT_FILE}")
+        print(f"Found existing iteration file: {ITERATION_OUTPUT_FILE}")
         try:
             with open(ITERATION_OUTPUT_FILE, 'r') as f:
                 loaded_iteration = json.load(f)['best_iteration']
-            print(f"Numero iterazioni pre-calcolato caricato: {loaded_iteration}")
+            print(f"Pre-calculated iteration count loaded: {loaded_iteration}")
         except Exception as e:
-            print(f"Errore caricamento {ITERATION_OUTPUT_FILE}: {e}. Ricalcolo...")
+            print(f"Error loading {ITERATION_OUTPUT_FILE}: {e}. Recalculating...")
             loaded_iteration = None
 
     final_params_fit = best_params_clean.copy()
     if loaded_iteration:
-        # Se abbiamo caricato un'iterazione, la usiamo e disattiviamo l'early stopping
+        # If we loaded an iteration, use it and disable early stopping
         final_params_fit.update({
             'n_estimators': loaded_iteration,
             'early_stopping_rounds': None, 
             'eval_metric': 'Logloss', 'custom_metric': ['AUC'],
             'verbose': 1000, 'random_seed': 42
         })
-        print(f"Training modello con n_estimators={loaded_iteration} (fisso)...")
+        print(f"Training model with n_estimators={loaded_iteration} (fixed)...")
     else:
-        # Comportamento originale: trova la migliore iterazione
+        # Original behavior: find the best iteration
         final_params_fit.update({
             'n_estimators': 2000,
-            'early_stopping_rounds': 50, # Attivo
+            'early_stopping_rounds': 50, # Active
             'eval_metric': 'Logloss', 'custom_metric': ['AUC'],
             'verbose': 1000, 'random_seed': 42
         })
-        print("Training modello (max 2000) con Early Stopping (50)...")
+        print("Training model (max 2000) with Early Stopping (50)...")
     final_params_fit.pop('objective', None) 
 
-    print("Training modello: Train (60%), Eval (20%)...")
+    print("Training model: Train (60%), Eval (20%)...")
     model = CatBoostClassifier(**final_params_fit)
     model.fit(
         X_train, y_train,
@@ -1187,15 +1187,15 @@ def run_10_optimize_and_validate(run_grid_search=False):
 
     if loaded_iteration:
         best_iteration = loaded_iteration
-        print(f"\nUsata iterazione pre-caricata: {best_iteration}")
+        print(f"\nUsed pre-loaded iteration: {best_iteration}")
     else:
         best_iteration = model.get_best_iteration()
-        print(f"\nNumero ottimale di iterazioni (trees) trovato: {best_iteration}")
+        print(f"\nOptimal number of iterations (trees) found: {best_iteration}")
         with open(ITERATION_OUTPUT_FILE, 'w') as f:
             json.dump({'best_iteration': best_iteration}, f, indent=2)
-        print(f"Migliore iterazione salvata in: {ITERATION_OUTPUT_FILE}")
+        print(f"Best iteration saved to: {ITERATION_OUTPUT_FILE}")
 
-    print("\nFase 5.3: Metriche di Performance (su 20% Validation):\n")
+    print("\nPhase 5.3: Performance Metrics (on 20% Validation):\n")
     y_pred_val = model.predict(X_val)
     y_pred_proba_val = model.predict_proba(X_val)[:, 1]
 
@@ -1208,36 +1208,36 @@ def run_10_optimize_and_validate(run_grid_search=False):
     print(f"  AUC (Validation 20%): {val_auc:.4f}")
 
     if train_accuracy > (val_accuracy + 0.05):
-        print("\033[93m  ATTENZIONE: Possibile Overfitting! (Delta > 5%)\033[0m")
+        print("\033[93m  WARNING: Possible Overfitting! (Delta > 5%)\033[0m")
     else:
-        print("\033[92m  OK: Nessun overfitting evidente.\033[0m")
+        print("\033[92m  OK: No obvious overfitting.\033[0m")
 
-    print("\nClassification Report (su 20% Validation):\n")
-    report_text_val = classification_report(y_val, y_pred_val, target_names=['Falso (0)', 'Vero (1)'], digits=4)
+    print("\nClassification Report (on 20% Validation):\n")
+    report_text_val = classification_report(y_val, y_pred_val, target_names=['False (0)', 'True (1)'], digits=4)
     print(report_text_val)
 
-    print(f"Salvataggio metriche (Validation) in: {REPORT_TXT_FILE}")
+    print(f"Saving metrics (Validation) to: {REPORT_TXT_FILE}")
     with open(REPORT_TXT_FILE, 'w') as f:
         f.write("Classification Report (on 20% Validation):\n\n")
         f.write(report_text_val)
 
-    print("\nFase 5.4: Salvataggio Grafici Diagnostici (Validation):\n")
+    print("\nPhase 5.4: Saving Diagnostic Plots (Validation):\n")
 
     cm_val = confusion_matrix(y_val, y_pred_val)
     plt.figure(figsize=(8, 6))
     sns.heatmap(cm_val, annot=True, fmt='d', cmap='Blues',
-                xticklabels=['Previsto Falso (0)', 'Previsto Vero (1)'],
-                yticklabels=['Reale Falso (0)', 'Reale Vero (1)'])
+                xticklabels=['Predicted False (0)', 'Predicted True (1)'],
+                yticklabels=['Actual False (0)', 'Actual True (1)'])
     plt.title("Confusion Matrix (20% Validation Set)")
     plt.savefig(CM_OUTPUT_FILE)
     plt.close()
-    print(f"Grafico CM (Validation) salvato in: {CM_OUTPUT_FILE}")
+    print(f"CM plot (Validation) saved to: {CM_OUTPUT_FILE}")
 
     importances = model.get_feature_importance()
     feature_names = X_train.columns
     importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
     top_20_features = importance_df.sort_values(by='Importance', ascending=False).head(20)
-    print("\nTop 20 Feature più Importanti:")
+    print("\nTop 20 Most Important Features:")
     print(top_20_features.to_string(index=False))
     plt.figure(figsize=(12, 10))
     sns.barplot(x='Importance', y='Feature', data=top_20_features, palette='viridis')
@@ -1245,7 +1245,7 @@ def run_10_optimize_and_validate(run_grid_search=False):
     plt.tight_layout()
     plt.savefig(IMPORTANCE_OUTPUT_FILE)
     plt.close()
-    print(f"Grafico Feature Importance salvato in: {IMPORTANCE_OUTPUT_FILE}")
+    print(f"Feature Importance plot saved to: {IMPORTANCE_OUTPUT_FILE}")
 
     results = model.get_evals_result()
     train_set_name = 'validation_0'
@@ -1255,19 +1255,19 @@ def run_10_optimize_and_validate(run_grid_search=False):
         plt.plot(results[train_set_name]['Logloss'], label='Training Loss (60%)')
         plt.plot(results[valid_set_name]['Logloss'], label='Validation Loss (20%)')
         plt.title('Learning Curve (Logloss)')
-        plt.xlabel('Iterazioni'); plt.ylabel('Logloss'); plt.legend(); plt.grid(True)
+        plt.xlabel('Iterations'); plt.ylabel('Logloss'); plt.legend(); plt.grid(True)
         plt.savefig(LOSS_CURVE_FILE)
         plt.close()
-        print(f"Grafico curva Logloss salvato in: {LOSS_CURVE_FILE}")
+        print(f"Logloss curve plot saved to: {LOSS_CURVE_FILE}")
     if 'AUC' in results.get(train_set_name, {}):
         plt.figure(figsize=(10, 6))
         plt.plot(results[train_set_name]['AUC'], label='Training AUC (60%)')
         plt.plot(results[valid_set_name]['AUC'], label='Validation AUC (20%)')
         plt.title('Learning Curve (AUC)')
-        plt.xlabel('Iterazioni'); plt.ylabel('AUC'); plt.legend(); plt.grid(True)
+        plt.xlabel('Iterations'); plt.ylabel('AUC'); plt.legend(); plt.grid(True)
         plt.savefig(AUC_CURVE_FILE)
         plt.close()
-        print(f"Grafico curva AUC salvato in: {AUC_CURVE_FILE}")
+        print(f"AUC curve plot saved to: {AUC_CURVE_FILE}")
 
     fpr_val, tpr_val, _ = roc_curve(y_val, y_pred_proba_val)
     plt.figure(figsize=(10, 8))
@@ -1278,26 +1278,26 @@ def run_10_optimize_and_validate(run_grid_search=False):
     plt.legend(loc="lower right"); plt.grid(True)
     plt.savefig(ROC_CURVE_FILE)
     plt.close()
-    print(f"Grafico ROC-AUC (Validation) salvato in: {ROC_CURVE_FILE}")
+    print(f"ROC-AUC plot (Validation) saved to: {ROC_CURVE_FILE}")
     
     print("\n" + "="*30)
-    print("FASE 5 COMPLETATA")
-    print(f"Controlla i risultati in {MODEL_OUTPUT_DIR}.")
+    print("PHASE 5 COMPLETE")
+    print(f"Check results in {MODEL_OUTPUT_DIR}.")
     print("="*30)
     return True
 
 def run_11_create_submission():
     """
-    FASE 6: Esegue OOF, addestra su 100%, genera file .npy e .csv.
+    PHASE 6: Runs OOF, trains on 100%, generates .npy and .csv files.
     """
     print("\n" + "="*30)
-    print("INIZIO FASE 6: Creazione OOF e Submission")
+    print("START PHASE 6: OOF Creation and Submission")
     print("="*30)
     
     N_SPLITS = 10
-    print("Avvio OOF (.npy), Test Preds (.npy) e Submission finale...")
+    print("Starting OOF (.npy), Test Preds (.npy) and Final Submission...")
 
-    print("Caricamento 100% Training, Test data e Parametri...")
+    print("Loading 100% Training, Test data, and Parameters...")
     try:
         X_train_full = pd.read_csv(TRAIN_PROCESSED_SELECTED_CSV)
         y_train_full = pd.read_csv(TARGET_TRAIN_CSV).values.ravel()
@@ -1305,21 +1305,21 @@ def run_11_create_submission():
 
         with open(PARAMS_OUTPUT_FILE, 'r') as f:
             best_params = json.load(f)
-        print(f"Parametri caricati da {PARAMS_OUTPUT_FILE}.")
+        print(f"Parameters loaded from {PARAMS_OUTPUT_FILE}.")
 
         with open(ITERATION_OUTPUT_FILE, 'r') as f:
             best_iteration = json.load(f)['best_iteration'] 
-        print(f"Numero ottimale iterazioni caricato: {best_iteration}")
+        print(f"Optimal iteration count loaded: {best_iteration}")
 
     except FileNotFoundError as e:
-        print("ERRORE: File non trovati.")
+        print("ERROR: Files not found.")
         print(e)
-        print(f"Assicurati che i file CSV siano in {DATA_PIPELINE_DIR}")
-        print(f"e i file JSON dei parametri siano in {MODEL_OUTPUT_DIR} (dalla Fase 5).")
+        print(f"Ensure CSV files are in {DATA_PIPELINE_DIR}")
+        print(f"and parameter JSON files are in {MODEL_OUTPUT_DIR} (from Phase 5).")
         return False
 
-    # --- SEZIONE 6.1: GENERAZIONE PREVISIONI OOF (CROSS-VALIDATION) ---
-    print(f"\n--- Avvio generazione Out-of-Fold (OOF) ({N_SPLITS} Folds) ---")
+    # --- SECTION 6.1: GENERATE OOF PREDICTIONS (CROSS-VALIDATION) ---
+    print(f"\n--- Starting Out-of-Fold (OOF) generation ({N_SPLITS} Folds) ---")
 
     skf = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=42)
     oof_preds = np.zeros(len(X_train_full))
@@ -1330,7 +1330,7 @@ def run_11_create_submission():
         'early_stopping_rounds': None,
         'verbose': 0, 'random_seed': 42
     })
-    # Rimuovi chiavi non necessarie/conflittuali
+    # Remove unnecessary/conflicting keys
     for key in ['eval_metric', 'custom_metric', 'objective']:
         oof_params.pop(key, None)
 
@@ -1343,14 +1343,14 @@ def run_11_create_submission():
         model_fold.fit(X_train_fold, y_train_fold)
         oof_preds[val_idx] = model_fold.predict_proba(X_val_fold)[:, 1]
 
-    print("Generazione predizioni OOF completata.")
-    print(f"Salvataggio predizioni OOF (raw numpy array) in {OOF_FILE_NPY}...")
+    print("OOF prediction generation complete.")
+    print(f"Saving OOF predictions (raw numpy array) to {OOF_FILE_NPY}...")
     np.save(OOF_FILE_NPY, oof_preds)
-    print(f"File OOF salvato in: {OOF_FILE_NPY} (Shape: {oof_preds.shape})")
+    print(f"OOF file saved to: {OOF_FILE_NPY} (Shape: {oof_preds.shape})")
 
-    # --- SEZIONE 6.2: TRAINING MODELLO FINALE SU 100% ---
-    print(f"\n--- Avvio Training Modello Finale (100% Data) ---")
-    print(f"Training modello finale su 100% dei dati ({len(X_train_full)} campioni)...")
+    # --- SECTION 6.2: TRAIN FINAL MODEL ON 100% ---
+    print(f"\n--- Starting Final Model Training (100% Data) ---")
+    print(f"Training final model on 100% of data ({len(X_train_full)} samples)...")
 
     final_params = best_params.copy()
     final_params.update({
@@ -1363,54 +1363,52 @@ def run_11_create_submission():
 
     final_model = CatBoostClassifier(**final_params)
     final_model.fit(X_train_full, y_train_full)
-    print("Training finale completato.")
+    print("Final training complete.")
 
-    # --- SEZIONE 6.3: GENERAZIONE SUBMISSION SU TEST SET (CSV e NPY) ---
-    print(f"\nGenerazione probabilità di predizione per il test set ({len(X_test_kaggle)} campioni)...")
+    # --- SECTION 6.3: GENERATE SUBMISSION ON TEST SET (CSV and NPY) ---
+    print(f"\nGenerating prediction probabilities for the test set ({len(X_test_kaggle)} samples)...")
 
     y_pred_proba = final_model.predict_proba(X_test_kaggle)[:, 1]
 
-    print(f"Salvataggio predizioni test set (raw numpy array) in {TEST_PREDS_NPY_FILE}...")
+    print(f"Saving test set predictions (raw numpy array) to {TEST_PREDS_NPY_FILE}...")
     np.save(TEST_PREDS_NPY_FILE, y_pred_proba)
-    print(f"File .npy del Test set per stacking salvato in: {TEST_PREDS_NPY_FILE}")
+    print(f"Test set .npy file for stacking saved to: {TEST_PREDS_NPY_FILE}")
 
-    # Carica i battle_id del TEST SET per il file .CSV
+    # Load TEST SET battle_ids for the .CSV file
     try:
-        print(f"Caricamento 'battle_id' da: '{TEST_FEATURES_FINAL_CSV}'...")
+        print(f"Loading 'battle_id' from: '{TEST_FEATURES_FINAL_CSV}'...")
         test_ids_df = pd.read_csv(TEST_FEATURES_FINAL_CSV)
         test_ids = test_ids_df['battle_id']
         
         if not X_test_kaggle.index.equals(test_ids_df.index):
-            print("ATTENZIONE: Index mismatch. Riallino gli indici.")
+            print("WARNING: Index mismatch. Realigning indices.")
             test_ids = test_ids_df.loc[X_test_kaggle.index, 'battle_id'].values
         else:
              test_ids = test_ids.values
 
     except Exception as e:
-        print(f"ERRORE CRITICO durante il caricamento dei battle_id da {TEST_FEATURES_FINAL_CSV}: {e}")
+        print(f"CRITICAL ERROR loading battle_ids from {TEST_FEATURES_FINAL_CSV}: {e}")
         return False
 
     if len(test_ids) != len(y_pred_proba):
-        print(f"ERRORE: Mismatch tra numero di test IDs ({len(test_ids)}) e predizioni ({len(y_pred_proba)}).")
+        print(f"ERROR: Mismatch between number of test IDs ({len(test_ids)}) and predictions ({len(y_pred_proba)}).")
         return False
 
-    # Salva il file di submission finale .CSV
-    # NOTA: La richiesta originale salvava le probabilità. Modifica 
-    # y_pred_proba in (y_pred_proba > 0.5).astype(int) se serve la predizione binaria.
-    print(f"Salvataggio file submission (.csv) con predizioni in {SUBMISSION_FILE_CSV}...")
+    # Save the final submission .CSV file
+    print(f"Saving submission file (.csv) with predictions to {SUBMISSION_FILE_CSV}...")
     submission_df = pd.DataFrame({
         'battle_id': test_ids,
-        'player_won': (y_pred_proba > 0.5).astype(int) # Converto in 0/1 per la submission
+        'player_won': (y_pred_proba > 0.5).astype(int)
     })
     submission_df.to_csv(SUBMISSION_FILE_CSV, index=False)
 
-    print("\n   SUBMISSION PRONTA  ")
-    print(f"File salvato in: {SUBMISSION_FILE_CSV}")
+    print("\n   SUBMISSION READY  ")
+    print(f"File saved to: {SUBMISSION_FILE_CSV}")
     print(submission_df.head())
 
     print("\n" + "="*30)
-    print("FASE 6 COMPLETATA")
+    print("PHASE 6 COMPLETE")
     print(f"Submission in: {SUBMISSION_DIR}")
-    print(f"File OOF in: {OOF_DIR}")
+    print(f"OOF files in: {OOF_DIR}")
     print("="*30)
     return True

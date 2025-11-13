@@ -1,13 +1,13 @@
 """
-Libreria di utilità per la pipeline LightGBM Pokémon.
+Utility library for the Pokémon LightGBM pipeline.
 
-Questo modulo contiene tutte le funzioni, le costanti e le configurazioni
-di percorso necessarie per l'intera pipeline, dal caricamento dei dati
-alla creazione della submission.
+This module contains all the functions, constants, and path configurations
+needed for the entire pipeline, from data loading
+to submission creation.
 
 """
 
-# --- 1. IMPORT CONSOLIDATI ---
+# --- 1. CONSOLIDATED IMPORTS ---
 import json
 import os
 import numpy as np
@@ -23,40 +23,40 @@ from sklearn.metrics import accuracy_score
 
 warnings.filterwarnings('ignore')
 
-# --- 2. CONFIGURAZIONE GLOBALE E PERCORSI ---
+# --- 2. GLOBAL CONFIGURATION AND PATHS ---
 
-# Definisci la directory base del progetto
+# Define the project base directory
 BASE_DIR = Path(__file__).resolve().parent
 
-# Cartelle
+# Folders
 INPUT_DIR_JSONL = BASE_DIR / 'Input'
 OUTPUT_DIR_DATA = BASE_DIR / 'LightGBM_Data_Pipeline'
 OUTPUT_DIR_MODEL = BASE_DIR / 'LightGBM_Model_Outputs'
 SUBMISSION_DIR = BASE_DIR / 'Submissions'
 OOF_DIR = BASE_DIR / 'OOF_Predictions'
 
-# Percorsi File (Fase 01: FE)
+# File Paths (Phase 01: FE)
 TRAIN_JSON_IN = INPUT_DIR_JSONL / 'train.jsonl'
 TEST_JSON_IN = INPUT_DIR_JSONL / 'test.jsonl'
 TRAIN_CSV_OUT = OUTPUT_DIR_DATA / 'train_features.csv'
 TEST_CSV_OUT = OUTPUT_DIR_DATA / 'test_features.csv'
 TEST_IDS_OUT = OUTPUT_DIR_DATA / 'test_ids.csv'
 
-# Percorsi File (Fase 02: Preprocessing)
+# File Paths (Phase 02: Preprocessing)
 X_TRAIN_OUT = OUTPUT_DIR_DATA / 'X_train.npy'
 Y_TRAIN_OUT = OUTPUT_DIR_DATA / 'y_train.npy'
 X_TEST_OUT = OUTPUT_DIR_DATA / 'X_test.npy'
 FEATURES_JSON_OUT = OUTPUT_DIR_MODEL / 'features_final.json'
 MEDIANS_JSON_OUT = OUTPUT_DIR_MODEL / 'preprocessing_medians.json'
 
-# Percorsi File (Fase 03: Training/Submission)
+# File Paths (Phase 03: Training/Submission)
 OOF_TRAIN_OUT = OOF_DIR / 'oof_lgbm_proba.npy'
 OOF_TEST_OUT = OOF_DIR / 'test_preds_lgbm_proba.npy'
 SUB_ENSEMBLE_PROBA_OUT = SUBMISSION_DIR / 'submission_lgbm_100pct_PROBA.csv'
 
-# --- 3. COSTANTI DI MODELLO E GIOCO ---
+# --- 3. MODEL AND GAME CONSTANTS ---
 
-# Costanti di efficacia dei tipi
+# Type effectiveness constants
 TYPE_CHART = {
     'normal': {'rock': 0.5, 'ghost': 0},
     'fire': {'fire': 0.5, 'water': 0.5, 'grass': 2, 'ice': 2, 'bug': 2, 'rock': 0.5, 'dragon': 0.5},
@@ -75,7 +75,7 @@ TYPE_CHART = {
     'dragon': {'dragon': 2}
 }
 
-# IPERPARAMETRI OTTIMALI (da Notebook Lightgbm_v2, Trial 71)
+# OPTIMAL HYPERPARAMETERS (from Lightgbm_v2 Notebook, Trial 71)
 BEST_PARAMS = {
     'objective': 'binary',
     'metric': 'binary_logloss',
@@ -84,7 +84,7 @@ BEST_PARAMS = {
     'seed': 42,
     'n_jobs': -1,
     'learning_rate': 0.013679823261876542,
-    'n_estimators': 650, # Dal trial (NB: nel notebook il CV usa 650, la sub finale 1000. Usiamo 650 per coerenza)
+    'n_estimators': 650, # From trial (NB: notebook CV uses 650, final sub 1000. Using 650 for consistency)
     'num_leaves': 97,
     'max_depth': 7,
     'min_child_samples': 70,
@@ -96,30 +96,30 @@ BEST_PARAMS = {
     'min_split_gain': 0.3554832229238166
 }
 
-# --- 4. FUNZIONI HELPER (Feature Engineering) ---
+# --- 4. HELPER FUNCTIONS (Feature Engineering) ---
 
 def load_jsonl(path):
-    """Carica un file .jsonl e lo restituisce come lista di dizionari."""
+    """Loads a .jsonl file and returns it as a list of dictionaries."""
     data = []
     try:
         with open(path, 'r') as f:
             for line in f:
                 data.append(json.loads(line))
     except FileNotFoundError:
-        print(f"ERRORE: File non trovato: {path}")
-        print("Assicurati che 'train.jsonl' e 'test.jsonl' siano nella directory 'Input/'.")
+        print(f"ERROR: File not found: {path}")
+        print("Ensure 'train.jsonl' and 'test.jsonl' are in the 'Input/' directory.")
         return None
     return data
 
 def get_effectiveness(attack_type: str, defense_types: list) -> float:
-    """Calcola l'efficacia di un tipo contro una lista di tipi."""
+    """Calculates the effectiveness of one type against a list of types."""
     if not attack_type or not defense_types: return 1.0
     eff = 1.0
     for d in defense_types: eff *= TYPE_CHART.get(attack_type, {}).get(d, 1.0)
     return eff
 
 def _entropy(counter: Counter) -> float:
-    """Calcola l'entropia di un Counter."""
+    """Calculates the entropy of a Counter."""
     total = sum(counter.values())
     if total == 0: return 0.0
     ent = 0.0
@@ -129,7 +129,7 @@ def _entropy(counter: Counter) -> float:
     return ent
 
 def calculate_type_advantage(team1: list, team2_lead: dict) -> dict:
-    """Calcola il vantaggio aggregato del team1 contro il lead del team2."""
+    """Calculates the aggregated advantage of team1 against team2's lead."""
     out = {'p1_vs_lead_avg_effectiveness': 0.0, 'p1_vs_lead_max_effectiveness': 0.0, 'p1_super_effective_options': 0}
     if not team1 or not team2_lead: return out
     lead_types = [t.lower() for t in team2_lead.get('types', [])]
@@ -147,7 +147,7 @@ def calculate_type_advantage(team1: list, team2_lead: dict) -> dict:
     return out
 
 def team_aggregate_features(team: list, prefix: str = 'p1_') -> dict:
-    """Estrae statistiche aggregate (media, somma, std, etc.) da un team."""
+    """Extracts aggregated statistics (mean, sum, std, etc.) from a team."""
     stats = ['base_hp','base_atk','base_def','base_spa','base_spd','base_spe']
     out = {}
     vals = {s: [] for s in stats}
@@ -180,7 +180,7 @@ def team_aggregate_features(team: list, prefix: str = 'p1_') -> dict:
     return out
 
 def lead_vs_lead_features(p1_lead: dict, p2_lead: dict) -> dict:
-    """Confronta direttamente le statistiche dei due Pokémon lead."""
+    """Directly compares the stats of the two lead Pokémon."""
     out = {}
     for s in ['base_hp','base_atk','base_def','base_spa','base_spd','base_spe']:
         out[f'lead_diff_{s}'] = float(p1_lead.get(s,0) - p2_lead.get(s,0))
@@ -193,7 +193,7 @@ def lead_vs_lead_features(p1_lead: dict, p2_lead: dict) -> dict:
     return out
 
 def lead_aggregate_features(pokemon: dict, prefix: str = 'p2_lead_') -> dict:
-    """Estrae le feature di base per un singolo Pokémon (il lead avversario)."""
+    """Extracts base features for a single Pokémon (the opponent's lead)."""
     out = {}
     for s in ['base_hp','base_atk','base_def','base_spa','base_spd','base_spe']:
         out[f'{prefix}{s}'] = float(pokemon.get(s,0))
@@ -206,7 +206,7 @@ def lead_aggregate_features(pokemon: dict, prefix: str = 'p2_lead_') -> dict:
     return out
 
 def quick_boost_features_v2(record: dict) -> dict:
-    """Estrae feature "veloci" di confronto team vs lead."""
+    """Extracts "quick" comparison features (team vs lead)."""
     out = {}
     p1_team = record.get('p1_team_details', [])
     p2_lead = record.get('p2_lead_details', {})
@@ -259,7 +259,7 @@ def quick_boost_features_v2(record: dict) -> dict:
     return out
 
 def summary_from_timeline(timeline: list, p1_team: list) -> dict:
-    """Estrae un riepilogo dettagliato della battaglia dalla timeline."""
+    """Extracts a detailed battle summary from the timeline."""
     out = {}
     if not timeline: return {'tl_p1_moves':0,'tl_p2_moves':0,'tl_p1_est_damage':0.0,'tl_p2_est_damage':0.0,'damage_diff':0.0}
     p1_moves = p2_moves = 0; p1_damage = p2_damage = 0.0
@@ -396,7 +396,7 @@ def summary_from_timeline(timeline: list, p1_team: list) -> dict:
     return out
 
 def extract_move_coverage_from_timeline(timeline: list, prefix: str = 'p1_') -> dict:
-    """Estrae la copertura dei tipi di mosse usate."""
+    """Extracts the type coverage of moves used."""
     out = {}
     m_types = set(); m_cats = Counter(); unique_m = set(); stab = 0
     for turn in timeline[:30]:
@@ -421,7 +421,7 @@ def extract_move_coverage_from_timeline(timeline: list, prefix: str = 'p1_') -> 
     return out
 
 def ability_features(team: list, prefix: str) -> dict:
-    """Conta le abilità chiave (immunità, intimidazione, meteo) in un team."""
+    """Counts key abilities (immunity, intimidate, weather) in a team."""
     imm = {'levitate':0,'volt_absorb':0,'water_absorb':0,'flash_fire':0}
     drop = {'intimidate':0}; weather = {'drought':0,'drizzle':0,'sand_stream':0}
     for p in team:
@@ -438,7 +438,7 @@ def ability_features(team: list, prefix: str) -> dict:
     return out
 
 def momentum_features(timeline: list) -> dict:
-    """Calcola il momentum (vantaggio HP cumulativo) e la sua volatilità."""
+    """Calculates momentum (cumulative HP advantage) and its volatility."""
     out = {}
     if not timeline: return out
     advs = []; cum = 0.0
@@ -458,7 +458,7 @@ def momentum_features(timeline: list) -> dict:
     return out
 
 def extract_opponent_team_from_timeline(timeline: list, p1_team: list) -> dict:
-    """Estrae informazioni sui Pokémon avversari visti durante la battaglia."""
+    """Extracts information about opponent Pokémon seen during the battle."""
     out = {}
     seen = set(); types = []
     for turn in timeline[:30]:
@@ -484,7 +484,7 @@ def extract_opponent_team_from_timeline(timeline: list, p1_team: list) -> dict:
     return out
 
 def extract_information_advantage(timeline: list) -> dict:
-    """Calcola il vantaggio informativo (Pokémon visti)."""
+    """Calculates information advantage (Pokémon seen)."""
     p1_rev = set(); p2_rev = set(); reveal_turns_p2 = []
     for turn in timeline[:30]:
         t = turn.get('turn', 0)
@@ -499,7 +499,7 @@ def extract_information_advantage(timeline: list) -> dict:
     }
 
 def extract_advanced_momentum(timeline: list) -> dict:
-    """Calcola momentum avanzato (switch forzati, switch su immunità)."""
+    """Calculates advanced momentum (forced switches, immunity switches)."""
     p1_immune = 0; p2_forced = 0
     for i, turn in enumerate(timeline[:30]):
         if i == 0: continue
@@ -519,7 +519,7 @@ def extract_advanced_momentum(timeline: list) -> dict:
     return {'tl_p1_immune_switches': p1_immune, 'tl_p2_forced_switches': p2_forced}
 
 def extract_gamestate_snapshots(timeline: list) -> dict:
-    """Cattura lo stato (differenza HP) a turni specifici (10, 20, 30)."""
+    """Captures the state (HP difference) at specific turns (10, 20, 30)."""
     turns_lead = 0; hp_diff_10 = 0.0; hp_diff_20 = 0.0; hp_diff_30 = 0.0
     for i, turn in enumerate(timeline[:30]):
         t = i + 1
@@ -528,7 +528,7 @@ def extract_gamestate_snapshots(timeline: list) -> dict:
         if h1 > h2: turns_lead += 1
         if t == 10: hp_diff_10 = h1 - h2
         if t == 20: hp_diff_20 = h1 - h2
-        hp_diff_30 = h1 - h2 # Ultimo stato disponibile
+        hp_diff_30 = h1 - h2 # Last available state
     return {
         'tl_turns_with_hp_lead': turns_lead,
         'tl_hp_diff_turn_10': float(hp_diff_10),
@@ -537,7 +537,7 @@ def extract_gamestate_snapshots(timeline: list) -> dict:
     }
 
 def extract_observed_mechanics(timeline: list) -> dict:
-    """Conta meccaniche specifiche (cure, congelamento)."""
+    """Counts specific mechanics (heals, freezes)."""
     p1_heals = 0; p2_heals = 0; p1_frz = 0; p2_frz = 0
     for i, turn in enumerate(timeline[:30]):
         if i == 0: continue
@@ -555,10 +555,10 @@ def extract_observed_mechanics(timeline: list) -> dict:
     return {'tl_heal_diff': p1_heals - p2_heals, 'tl_freeze_adv': p2_frz - p1_frz}
 
 
-# --- 5. FUNZIONI MASTER (Feature Engineering) ---
+# --- 5. MASTER FUNCTIONS (Feature Engineering) ---
 
 def prepare_record_features_COMPLETE(record: dict, max_turns: int = 30) -> dict:
-    """Funzione Master che orchestra tutti gli helper FE per un singolo record."""
+    """Master function that orchestrates all FE helpers for a single record."""
     out = {'battle_id': record.get('battle_id')}
     if 'player_won' in record: out['player_won'] = int(bool(record['player_won']))
     
@@ -567,7 +567,7 @@ def prepare_record_features_COMPLETE(record: dict, max_turns: int = 30) -> dict:
     p1_lead = p1_team[0] if p1_team else {}
     tl = record.get('battle_timeline', [])[:max_turns]
     
-    # Feature statiche
+    # Static features
     out.update(team_aggregate_features(p1_team, 'p1_'))
     out.update(lead_aggregate_features(p2_lead, 'p2_lead_'))
     out.update(ability_features(p1_team, 'p1_'))
@@ -575,17 +575,17 @@ def prepare_record_features_COMPLETE(record: dict, max_turns: int = 30) -> dict:
     out.update(ability_features([p2_lead], 'p2_lead_'))
     out['p1_intimidate_vs_lead'] = int(out.get('p1_ability_intimidate_count',0) > 0)
     
-    # Feature dinamiche (da timeline)
+    # Dynamic features (from timeline)
     out.update(summary_from_timeline(tl, p1_team))
     out.update(extract_move_coverage_from_timeline(tl, 'p1_'))
     out.update(extract_move_coverage_from_timeline(tl, 'p2_'))
     out.update(extract_opponent_team_from_timeline(tl, p1_team))
     out.update(momentum_features(tl))
     
-    # Feature veloci (da record)
+    # Quick features (from record)
     out.update(quick_boost_features_v2(record))
     
-    # Feature calcolate (delta)
+    # Calculated features (deltas)
     out['team_hp_sum_minus_p2lead_hp'] = out.get('p1_base_hp_sum',0) - out.get('p2_lead_base_hp',0)
     out['team_spa_mean_minus_p2spa'] = out.get('p1_base_spa_mean',0) - out.get('p2_lead_base_spa',0)
     out['speed_advantage'] = out.get('p1_base_spe_sum',0) - out.get('p2_lead_base_spe',0)
@@ -598,7 +598,7 @@ def prepare_record_features_COMPLETE(record: dict, max_turns: int = 30) -> dict:
     p2_bulk = out.get('p2_lead_base_def',1) + out.get('p2_lead_base_spd',1)
     out['p1_se_options_vs_lead_bulk'] = out.get('p1_super_effective_options',0) / (p2_bulk + 1e-6)
     
-    # Feature P2 (se presenti, es. in train)
+    # P2 features (if present, e.g., in train)
     if p2_team := record.get('p2_team_details', []):
         out.update(team_aggregate_features(p2_team, 'p2_'))
         out['team_hp_sum_diff'] = out.get('p1_base_hp_sum',0) - out.get('p2_base_hp_sum',0)
@@ -606,14 +606,14 @@ def prepare_record_features_COMPLETE(record: dict, max_turns: int = 30) -> dict:
         out['team_spe_mean_diff'] = out.get('p1_base_spe_mean',0) - out.get('p2_base_spe_mean',0)
         out['n_unique_types_team_diff'] = out.get('p1_n_unique_types',0) - out.get('p2_n_unique_types',0)
         
-    # Feature avanzate (V2/V3)
+    # Advanced features (V2/V3)
     if tl:
         out.update(extract_information_advantage(tl))
         out.update(extract_advanced_momentum(tl))
         out.update(extract_gamestate_snapshots(tl))
         out.update(extract_observed_mechanics(tl))
     else:
-        # Defaults per record senza timeline
+        # Defaults for records without timeline
         out.update({
             'tl_p1_revealed_count': 1, 'tl_p2_revealed_count': 1, 'tl_info_advantage': 0,
             'tl_p2_avg_reveal_turn': 30.0, 'tl_p1_immune_switches': 0, 'tl_p2_forced_switches': 0,
@@ -624,7 +624,7 @@ def prepare_record_features_COMPLETE(record: dict, max_turns: int = 30) -> dict:
     return out
 
 def create_features_from_raw(data: list) -> pd.DataFrame:
-    """Applica la funzione master FE a un'intera lista di record (dati raw)."""
+    """Applies the master FE function to an entire list of records (raw data)."""
     rows = []
     for b in tqdm(data, desc='Feature Engineering'): 
         try:
@@ -633,7 +633,7 @@ def create_features_from_raw(data: list) -> pd.DataFrame:
                 feat['battle_id'] = b.get('battle_id')
             rows.append(feat)
         except Exception as e:
-            print(f"ERRORE durante FE su battle_id {b.get('battle_id')}: {e}")
+            print(f"ERROR during FE on battle_id {b.get('battle_id')}: {e}")
             rows.append({'battle_id': b.get('battle_id'), 'error': 1})
     df = pd.DataFrame(rows)
     if 'player_won' in df.columns:
@@ -641,86 +641,86 @@ def create_features_from_raw(data: list) -> pd.DataFrame:
     return df.fillna(0)
 
 
-# --- 6. FUNZIONI DI PIPELINE (Esecuzione Fasi) ---
+# --- 6. PIPELINE FUNCTIONS (Phase Execution) ---
 
 def ensure_directories():
-    """Crea tutte le directory di output necessarie."""
-    print("Verifica delle directory di output...")
+    """Creates all necessary output directories."""
+    print("Verifying output directories...")
     dirs_to_create = [
         INPUT_DIR_JSONL, OUTPUT_DIR_DATA, OUTPUT_DIR_MODEL,
         SUBMISSION_DIR, OOF_DIR
     ]
     for dir_path in dirs_to_create:
         os.makedirs(dir_path, exist_ok=True)
-    print("Directory verificate.")
+    print("Directories verified.")
 
 
 def run_01_feature_engineering():
     """
-    FASE 01: Esegue la conversione da JSONL a CSV con feature engineering.
+    PHASE 01: Performs conversion from JSONL to CSV with feature engineering.
     """
     print("\n" + "="*30)
-    print("INIZIO FASE 01: Feature Engineering (LGBM)")
+    print("START PHASE 01: Feature Engineering (LGBM)")
     print("="*30)
     
-    print('Caricamento dati raw...')
+    print('Loading raw data...')
     train_raw = load_jsonl(TRAIN_JSON_IN)
     test_raw = load_jsonl(TEST_JSON_IN)
     
     if train_raw is None or test_raw is None:
-        print("ERRORE: Dati raw non caricati. Interruzione.")
+        print("ERROR: Raw data not loaded. Aborting.")
         return False
         
     print(f'Train records: {len(train_raw)}, Test records: {len(test_raw)}')
     
-    print('Creazione feature per Train set...')
+    print('Creating features for Train set...')
     train_df = create_features_from_raw(train_raw)
     
-    print('Creazione feature per Test set...')
+    print('Creating features for Test set...')
     test_df = create_features_from_raw(test_raw)
     
     print(f'Feature shape train/test: {train_df.shape} {test_df.shape}')
     
-    # Salva i file CSV
+    # Save CSV files
     try:
-        print(f"Salvataggio in {TRAIN_CSV_OUT}...")
+        print(f"Saving to {TRAIN_CSV_OUT}...")
         train_df.to_csv(TRAIN_CSV_OUT, index=False)
         
-        print(f"Salvataggio in {TEST_CSV_OUT}...")
+        print(f"Saving to {TEST_CSV_OUT}...")
         test_df.to_csv(TEST_CSV_OUT, index=False)
         
-        # Salva gli ID del test per la submission finale
+        # Save test IDs for the final submission
         test_ids_df = test_df[['battle_id']].copy()
         test_ids_df.to_csv(TEST_IDS_OUT, index=False)
-        print(f"Salvataggio ID test in {TEST_IDS_OUT}...")
+        print(f"Saving test IDs to {TEST_IDS_OUT}...")
         
     except Exception as e:
-        print(f"ERRORE during il salvataggio dei CSV: {e}")
+        print(f"ERROR during CSV saving: {e}")
         return False
 
-    print(f"\nFASE 01 (Feature Engineering) completata con successo.")
-    print(f"File CSV salvati in '{OUTPUT_DIR_DATA}'")
+    print(f"\nPHASE 01 (Feature Engineering) completed successfully.")
+    print(f"CSV files saved in '{OUTPUT_DIR_DATA}'")
     return True
 
 def run_02_preprocessing():
     """
-    FASE 02: Esegue il preprocessing (Imputazione) e salva i file .npy.
+    PHASE 02: Performs preprocessing (Imputation) and saves .npy files.
     """
     print("\n" + "="*30)
-    print("INIZIO FASE 02: Preprocessing (LGBM)")
+    print("START PHASE 02: Preprocessing (LGBM)")
     print("="*30)
 
-    # --- 1. Carica Dati CSV ---
-    print(f"Caricamento {TRAIN_CSV_OUT.name} e {TEST_CSV_OUT.name}...")
+    # --- 1. Load CSV Data ---
+    print(f"Loading {TRAIN_CSV_OUT.name} and {TEST_CSV_OUT.name}...")
     try:
         train_df = pd.read_csv(TRAIN_CSV_OUT)
         test_df = pd.read_csv(TEST_CSV_OUT)
     except FileNotFoundError:
-        print("ERRORE: File .csv non trovati. Esegui prima la Fase 01.")
+        print("ERROR: .csv files not found. Run Phase 01 first.")
         return False
 
-    # --- 2. Definisci Feature Numeriche ---
-    print("Definizione feature numeriche...")
+    # --- 2. Define Numeric Features ---
+    print("Defining numeric features...")
     exclude_cols = ['battle_id', 'player_won', 'error']
     string_cols = train_df.select_dtypes(include=['object']).columns.tolist()
     exclude_cols.extend(string_cols)
@@ -732,16 +732,16 @@ def run_02_preprocessing():
     ALL_NUMERIC_FEATURES = [c for c in train_df.columns if c not in exclude_cols and c in common_cols]
     FEATURES_FINAL = ALL_NUMERIC_FEATURES
 
-    print(f"Trovate e selezionate {len(FEATURES_FINAL)} feature numeriche.")
+    print(f"Found and selected {len(FEATURES_FINAL)} numeric features.")
 
-    # Salva la lista
+    # Save the list
     with open(FEATURES_JSON_OUT, 'w') as f:
         json.dump(FEATURES_FINAL, f, indent=4)
-    print(f"Lista feature salvata in: {FEATURES_JSON_OUT}")
+    print(f"Feature list saved to: {FEATURES_JSON_OUT}")
 
 
-    # --- 3. Preprocessing (Imputazione) ---
-    print("\nAvvio preprocessing finale (Imputazione con Mediana)...")
+    # --- 3. Preprocessing (Imputation) ---
+    print("\nStarting final preprocessing (Median Imputation)...")
     y = train_df['player_won'].astype(int).values
 
     final_train_df = train_df[FEATURES_FINAL].astype(float).replace([np.inf, -np.inf], np.nan)
@@ -751,32 +751,32 @@ def run_02_preprocessing():
     final_test_df = test_df.reindex(columns=FEATURES_FINAL, fill_value=np.nan).astype(float).replace([np.inf, -np.inf], np.nan)
     X_test = final_test_df.fillna(final_medians).values
 
-    print("Imputazione completata.")
+    print("Imputation completed.")
 
-    # Salva i file .npy
+    # Save .npy files
     np.save(X_TRAIN_OUT, X_train)
     np.save(Y_TRAIN_OUT, y)
     np.save(X_TEST_OUT, X_test)
-    print(f"File .npy salvati: {X_TRAIN_OUT.name}, {Y_TRAIN_OUT.name}, {X_TEST_OUT.name}")
+    print(f".npy files saved: {X_TRAIN_OUT.name}, {Y_TRAIN_OUT.name}, {X_TEST_OUT.name}")
 
-    # Salva le mediane
+    # Save medians
     with open(MEDIANS_JSON_OUT, 'w') as f:
         json.dump(final_medians.to_dict(), f, indent=4)
-    print(f"Mediane di imputazione salvate in: {MEDIANS_JSON_OUT}")
+    print(f"Imputation medians saved to: {MEDIANS_JSON_OUT}")
 
-    print("\nFASE 02 (Preprocessing) completata con successo.")
+    print("\nPHASE 02 (Preprocessing) completed successfully.")
     return True
 
 def run_03_training_and_submission():
     """
-    FASE 03: Esegue il training CV 10-fold, salva OOF e crea la submission.
+    PHASE 03: Runs 10-fold CV training, saves OOF, and creates the submission.
     """
     print("\n" + "="*30)
-    print("INIZIO FASE 03: Training e Submission (LGBM)")
+    print("START PHASE 03: Training and Submission (LGBM)")
     print("="*30)
 
-    # --- 1. Carica Dati .npy ---
-    print("Caricamento dati .npy e IDs...")
+    # --- 1. Load .npy Data ---
+    print("Loading .npy data and IDs...")
     try:
         X = np.load(X_TRAIN_OUT)
         y = np.load(Y_TRAIN_OUT)
@@ -785,18 +785,18 @@ def run_03_training_and_submission():
         with open(FEATURES_JSON_OUT, 'r') as f:
             FEATURES = json.load(f)
     except FileNotFoundError:
-        print("ERRORE: File .npy non trovati. Esegui prima la Fase 01 e 02.")
+        print("ERROR: .npy files not found. Run Phase 01 and 02 first.")
         return False
 
-    print(f"Dati caricati: X_train {X.shape}, y_train {y.shape}, X_test {X_test_matrix.shape}")
-    print(f"Utilizzando {len(FEATURES)} feature e i parametri V2.")
+    print(f"Data loaded: X_train {X.shape}, y_train {y.shape}, X_test {X_test_matrix.shape}")
+    print(f"Using {len(FEATURES)} features and V2 parameters.")
 
-    # --- 2. Esegui 10-Fold CV e salva OOF ---
-    print("\n=== Avvio 10-Fold Cross-Validation (per Ensemble) ===")
+    # --- 2. Run 10-Fold CV and save OOF ---
+    print("\n=== Starting 10-Fold Cross-Validation (for Ensemble) ===")
     skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
 
-    oof_train_proba = np.zeros(len(X)) # Predizioni sul train set
-    oof_test_proba_list = [] # Lista per le 10 predizioni sul test set
+    oof_train_proba = np.zeros(len(X)) # Predictions on the train set
+    oof_test_proba_list = [] # List for the 10 predictions on the test set
     fold_accuracies = []
     train_accuracies = []
     train_val_gaps = []
@@ -812,50 +812,50 @@ def run_03_training_and_submission():
             callbacks=[lgb.early_stopping(stopping_rounds=30, verbose=False)]
         )
         
-        # Predizioni di validazione (per OOF train e score)
+        # Validation predictions (for OOF train and score)
         y_proba_val = clf.predict_proba(X_val)[:, 1]
         y_pred_val = (y_proba_val > 0.5).astype(int)
         oof_train_proba[val_idx] = y_proba_val
         val_acc = accuracy_score(y_val, y_pred_val)
         fold_accuracies.append(val_acc)
         
-        # Calcolo gap
+        # Calculate gap
         y_pred_tr = clf.predict(X_tr)
         tr_acc = accuracy_score(y_tr, y_pred_tr)
         train_accuracies.append(tr_acc)
         train_val_gaps.append(tr_acc - val_acc)
         
-        # Predizioni sul TEST SET (per OOF test)
+        # Predictions on the TEST SET (for OOF test)
         y_proba_test_fold = clf.predict_proba(X_test_matrix)[:, 1]
         oof_test_proba_list.append(y_proba_test_fold)
         
         print(f'Fold {fold_idx+1}: val_acc={val_acc*100:.2f}%, train_acc={tr_acc*100:.2f}%, gap={(tr_acc - val_acc)*100:.2f}%')
 
-    print("\n--- Risultati CV (10 Folds) ---")
+    print("\n--- CV Results (10 Folds) ---")
     mean_cv_acc = np.mean(fold_accuracies)
     std_cv_acc = np.std(fold_accuracies)
     mean_gap = np.mean(train_val_gaps)
     print(f'Mean CV accuracy: {mean_cv_acc*100:.2f}% ± {std_cv_acc*100:.2f}%')
     print(f'Mean gap (train - val): {mean_gap*100:.2f}%')
 
-    # Salva OOF
+    # Save OOF
     oof_test_proba = np.stack(oof_test_proba_list) # Shape (10, 5000)
     np.save(OOF_TRAIN_OUT, oof_train_proba)
     np.save(OOF_TEST_OUT, oof_test_proba)
-    print(f"Predizioni OOF (Train e Test) salvate in '{OOF_DIR}'")
+    print(f"OOF predictions (Train and Test) saved in '{OOF_DIR}'")
 
-    # --- 3. Crea Submission ENSEMBLE ---
-    print("\n=== Creazione Submission Ensemble (Media 10 Folds) ===")
+    # --- 3. Create ENSEMBLE Submission ---
+    print("\n=== Creating Ensemble Submission (Mean of 10 Folds) ===")
     
     mean_test_proba = np.mean(oof_test_proba, axis=0)
     
-    # Salva submission PROBABILITÀ (per ensemble)
+    # Save PROBABILITY submission (for ensemble)
     sub_ensemble_proba = pd.DataFrame({
         'battle_id': test_ids_df['battle_id'].astype(np.int64),
         'player_won': mean_test_proba
     })
     sub_ensemble_proba.to_csv(SUB_ENSEMBLE_PROBA_OUT, index=False)
-    print(f"Submission ENSEMBLE (Proba) salvata in: {SUB_ENSEMBLE_PROBA_OUT}")
+    print(f"ENSEMBLE submission (Proba) saved to: {SUB_ENSEMBLE_PROBA_OUT}")
 
-    print("\nFASE 03 (Training e Submission) completata con successo.")
+    print("\nPHASE 03 (Training and Submission) completed successfully.")
     return True
