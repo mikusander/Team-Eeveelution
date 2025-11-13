@@ -1059,10 +1059,16 @@ def run_09_data_splitter():
 
 # --- 8. PIPELINE FUNCTIONS (PHASE 5 & 6 - TRAINING AND SUBMISSION) ---
 
-def run_10_optimize_and_validate(run_grid_search=False):
+def run_10_optimize_and_validate(run_grid_search=False, recalculate_iterations=False):
     """
     PHASE 5: Performs optimization (optional) and validation on the 20% holdout.
     Saves parameters, reports, and plots.
+
+    Args:
+        run_grid_search (bool): If True, execute GridSearchCV to find new parameters.
+                                If False, load parameters from PARAMS_OUTPUT_FILE.
+        recalculate_iterations (bool): If True, run early stopping to find the best iteration.
+                                       If False, load iteration from ITERATION_OUTPUT_FILE.
     """
     print("\n" + "="*30)
     print("START PHASE 5: Optimization and Validation")
@@ -1144,19 +1150,23 @@ def run_10_optimize_and_validate(run_grid_search=False):
     print("\nPhase 5.2: Training on 60% and Diagnostics on 20% (Validation):\n")
 
     loaded_iteration = None
-    if os.path.exists(ITERATION_OUTPUT_FILE):
-        print(f"Found existing iteration file: {ITERATION_OUTPUT_FILE}")
-        try:
-            with open(ITERATION_OUTPUT_FILE, 'r') as f:
-                loaded_iteration = json.load(f)['best_iteration']
-            print(f"Pre-calculated iteration count loaded: {loaded_iteration}")
-        except Exception as e:
-            print(f"Error loading {ITERATION_OUTPUT_FILE}: {e}. Recalculating...")
-            loaded_iteration = None
+    if not recalculate_iterations:
+        if os.path.exists(ITERATION_OUTPUT_FILE):
+            print(f"Found existing iteration file: {ITERATION_OUTPUT_FILE}")
+            try:
+                with open(ITERATION_OUTPUT_FILE, 'r') as f:
+                    loaded_iteration = json.load(f)['best_iteration']
+                print(f"Pre-calculated iteration count loaded: {loaded_iteration}")
+            except Exception as e:
+                print(f"Error loading {ITERATION_OUTPUT_FILE}: {e}. Recalculating...")
+                loaded_iteration = None 
+        else:
+             print(f"Iteration file '{ITERATION_OUTPUT_FILE.name}' not found. Will run early stopping.")
+    else:
+        print("recalculate_iterations=True. Forcing re-calculation of best iteration count.")
 
     final_params_fit = best_params_clean.copy()
     if loaded_iteration:
-        # If we loaded an iteration, use it and disable early stopping
         final_params_fit.update({
             'n_estimators': loaded_iteration,
             'early_stopping_rounds': None, 
@@ -1165,14 +1175,14 @@ def run_10_optimize_and_validate(run_grid_search=False):
         })
         print(f"Training model with n_estimators={loaded_iteration} (fixed)...")
     else:
-        # Original behavior: find the best iteration
         final_params_fit.update({
             'n_estimators': 2000,
             'early_stopping_rounds': 50, # Active
             'eval_metric': 'Logloss', 'custom_metric': ['AUC'],
             'verbose': 1000, 'random_seed': 42
         })
-        print("Training model (max 2000) with Early Stopping (50)...")
+        print("Training model (max 2000) with Early Stopping (50) to find best iteration...")
+    
     final_params_fit.pop('objective', None) 
 
     print("Training model: Train (60%), Eval (20%)...")
@@ -1181,7 +1191,7 @@ def run_10_optimize_and_validate(run_grid_search=False):
         X_train, y_train,
         eval_set=[(X_train, y_train), (X_val, y_val)],
         plot=False,
-        use_best_model=True,
+        use_best_model=True, 
         verbose=1000
     )
 
@@ -1330,7 +1340,6 @@ def run_11_create_submission():
         'early_stopping_rounds': None,
         'verbose': 0, 'random_seed': 42
     })
-    # Remove unnecessary/conflicting keys
     for key in ['eval_metric', 'custom_metric', 'objective']:
         oof_params.pop(key, None)
 
