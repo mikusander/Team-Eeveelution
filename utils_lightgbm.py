@@ -105,7 +105,6 @@ def load_jsonl(path):
                 data.append(json.loads(line))
     except FileNotFoundError:
         print(f"ERROR: File not found: {path}")
-        print("Ensure 'train.jsonl' and 'test.jsonl' are in the 'Input/' directory.")
         return None
     return data
 
@@ -307,7 +306,6 @@ def summary_from_timeline_FULL(timeline: list, p1_team: list) -> dict:
         if p1s.get('name') and p1s.get('status') and p1_poke_statuses.get(p1s['name']) != p1s['status']:
             p2_statuses[p1s['status']] += 1; p1_poke_statuses[p1s['name']] = p1s['status']
 
-        # ✅ ERRORE 1 & 2 CORRETTO: Usa p1_move_types e p2_move_types
         if m1 := turn.get('p1_move_details'):
             p1_moves += 1
             if t := m1.get('type'): p1_move_types[t.lower()] += 1
@@ -315,7 +313,6 @@ def summary_from_timeline_FULL(timeline: list, p1_team: list) -> dict:
             p2_moves += 1
             if t := m2.get('type'): p2_move_types[t.lower()] += 1
 
-    # ✅ ERRORE 3 & 4 CORRETTO: Usa p1_dmg e p2_dmg (non p1_damage/p2_damage)
     out['tl_p1_moves'] = p1_moves; out['tl_p2_moves'] = p2_moves
     out['tl_p1_est_damage'] = float(p1_dmg); out['tl_p2_est_damage'] = float(p2_dmg)
     out['tl_p1_fainted'] = p1_fainted; out['tl_p2_fainted'] = p2_fainted
@@ -334,7 +331,6 @@ def summary_from_timeline_FULL(timeline: list, p1_team: list) -> dict:
         out[f'tl_p2_inflicted_{s}_count'] = p2_statuses[s]
         out[f'tl_inflicted_{s}_diff'] = p1_statuses[s] - p2_statuses[s]
 
-    # ✅ ERRORE CORRETTO: Usa p1_move_types e p2_move_types
     for mt in ['normal','fire','water','electric','grass','psychic','ice','dragon','rock','ground','flying','ghost','bug','poison','fighting']:
         out[f'tl_p1_move_type_{mt}_count'] = p1_move_types[mt]
         out[f'tl_p2_move_type_{mt}_count'] = p2_move_types[mt]
@@ -473,7 +469,7 @@ def extract_model2_features(battle: dict, pokedex: dict) -> dict:
     
     for p in battle.get('p1_team_details', []):
         for k in stats: p1_sum[k] += p.get(f'base_{k}', 0)
-    # P2 (solo visti)
+    # P2
     for name in p2_cond:
         if name in pokedex:
             for k in stats: p2_sum[k] += pokedex[name].get(f'base_{k}', 0)
@@ -535,7 +531,6 @@ def prepare_record_features_V12(record: dict, pokedex: dict, max_turns: int = 30
 def create_features_from_raw(data: list) -> pd.DataFrame:
     print("Building Pokedex...")
     POKEDEX = build_pokedex(data)
-    print(f"Pokedex size: {len(POKEDEX)}")
     
     rows = []
     for b in tqdm(data, desc='FE (V12 Maximalist)'):
@@ -567,9 +562,7 @@ def run_01_feature_engineering():
     """
     PHASE 01: Performs conversion from JSONL to CSV with feature engineering.
     """
-    print("\n" + "="*30)
     print("START PHASE 01: Feature Engineering (LGBM)")
-    print("="*30)
     
     print('Loading raw data...')
     train_raw = load_jsonl(TRAIN_JSON_IN)
@@ -586,8 +579,6 @@ def run_01_feature_engineering():
     
     print('Creating features for Test set...')
     test_df = create_features_from_raw(test_raw)
-    
-    print(f'Feature shape train/test: {train_df.shape} {test_df.shape}')
     
     # Save CSV files
     try:
@@ -614,9 +605,7 @@ def run_02_preprocessing():
     """
     PHASE 02: Performs preprocessing (Imputation) and saves .npy files.
     """
-    print("\n" + "="*30)
     print("START PHASE 02: Preprocessing (LGBM)")
-    print("="*30)
 
     # --- 1. Load CSV Data ---
     print(f"Loading {TRAIN_CSV_OUT.name} and {TEST_CSV_OUT.name}...")
@@ -665,12 +654,10 @@ def run_02_preprocessing():
     np.save(X_TRAIN_OUT, X_train)
     np.save(Y_TRAIN_OUT, y)
     np.save(X_TEST_OUT, X_test)
-    print(f".npy files saved: {X_TRAIN_OUT.name}, {Y_TRAIN_OUT.name}, {X_TEST_OUT.name}")
 
     # Save medians
     with open(MEDIANS_JSON_OUT, 'w') as f:
         json.dump(final_medians.to_dict(), f, indent=4)
-    print(f"Imputation medians saved to: {MEDIANS_JSON_OUT}")
 
     print("\nPHASE 02 (Preprocessing) completed successfully.")
     return True
@@ -679,9 +666,7 @@ def run_03_training_and_submission():
     """
     PHASE 03: Runs 10-fold CV training, saves OOF, and creates the submission.
     """
-    print("\n" + "="*30)
     print("START PHASE 03: Training and Submission (LGBM)")
-    print("="*30)
 
     # --- 1. Load .npy Data ---
     print("Loading .npy data and IDs...")
@@ -695,8 +680,7 @@ def run_03_training_and_submission():
     except FileNotFoundError:
         print("ERROR: .npy files not found. Run Phase 01 and 02 first.")
         return False
-
-    print(f"Data loaded: X_train {X.shape}, y_train {y.shape}, X_test {X_test_matrix.shape}")
+        
     print(f"Using {len(FEATURES)} features and V2 parameters.")
 
     # --- 2. Run 10-Fold CV and save OOF ---
@@ -763,7 +747,7 @@ def run_03_training_and_submission():
         'player_won_proba': mean_test_proba
     })
     sub_ensemble_proba.to_csv(SUB_ENSEMBLE_PROBA_OUT, index=False)
-    print(f"ENSEMBLE submission (Proba) saved to: {SUB_ENSEMBLE_PROBA_OUT}")
+    print(f"ENSEMBLE submission saved to: {SUB_ENSEMBLE_PROBA_OUT}")
 
     print("\nPHASE 03 (Training and Submission) completed successfully.")
     return True
