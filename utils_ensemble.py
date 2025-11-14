@@ -3,7 +3,7 @@ Utility library for Ensemble methods (Stacking and Blending).
 
 This module contains all the necessary functions, constants, and path configurations
 for:
-1. Stacking Ensemble (L1/L2 meta-models, Logistic Regression)
+1. Stacking Ensemble (Meta-models)
 2. Blending Ensemble (Simple weighted average)
 
 """
@@ -86,14 +86,11 @@ def load_oof_data():
             raise ValueError(f"OOF length mismatch! LGBM({len(oof_lgbm)}), CB({len(oof_catboost)}), XGB({len(oof_xgboost)}), Y({len(y_meta)})")
 
         X_meta = np.column_stack((oof_lgbm, oof_catboost, oof_xgboost))
-        print(f"Meta-Model Input (X_meta) shape: {X_meta.shape}") 
-        print(f"Meta-Model Target (y_meta) shape: {y_meta.shape}")
-        
+    
         return X_meta, y_meta
 
     except FileNotFoundError as e:
         print(f"ERROR: File not found: {e}")
-        print("Make sure you have run the base model pipelines (LGBM, CB, XGB).")
         return None, None
     except Exception as e:
         print(f"ERROR while loading OOF data: {e}")
@@ -107,7 +104,6 @@ def load_test_data():
         test_preds_catboost = np.load(TEST_PREDS_CATBOOST_FILE)
         test_preds_xgboost = np.load(TEST_PREDS_XGBOOST_FILE)
         if test_preds_lgbm_all_folds.ndim == 2:
-            print(f"Found {test_preds_lgbm_all_folds.shape[0]} folds for LGBM. Calculating mean...")
             test_preds_lgbm = np.mean(test_preds_lgbm_all_folds, axis=0)
         else:
             test_preds_lgbm = test_preds_lgbm_all_folds
@@ -122,7 +118,6 @@ def load_test_data():
             raise ValueError(f"Mismatch between IDs ({len(test_ids)}) and Predictions ({len(test_preds_lgbm)})")
 
         X_test_meta = np.column_stack((test_preds_lgbm, test_preds_catboost, test_preds_xgboost))
-        print(f"Test Input for Meta-Model (X_test_meta) shape: {X_test_meta.shape}")
         
         return X_test_meta, test_ids
 
@@ -162,9 +157,7 @@ def train_evaluate_logreg(X_meta, y_meta):
     [STACKING - LOGREG]
     Trains, evaluates, and saves the LogReg meta-model.
     """
-    print("\n" + "="*30)
     print("START PHASE 2a: LogReg Model Training (Stacking)")
-    print("="*30)
     
     model_logreg = LogisticRegression(random_state=SEED, C=1.0, solver='liblinear')
     
@@ -189,9 +182,7 @@ def train_evaluate_logreg(X_meta, y_meta):
     print(f"\nSaving LogReg Model to: {META_MODEL_FILE_LOGREG}")
     joblib.dump(model_logreg, META_MODEL_FILE_LOGREG)
     
-    print("="*30)
     print("PHASE 2a Complete: 'LogReg' Model saved.")
-    print("="*30)
     
     return model_logreg
 
@@ -201,9 +192,7 @@ def train_and_select_best_model(X_meta, y_meta):
     Trains all meta-models (L1 and L2), compares them,
     and saves only the BEST model.
     """
-    print("\n" + "="*30)
     print("START PHASE 2b: Selecting BEST Meta-Model (Stacking)")
-    print("="*30)
 
     # --- Model Definitions ---
     model_logreg = LogisticRegression(random_state=SEED, C=1.0, solver='liblinear')
@@ -257,13 +246,10 @@ def train_and_select_best_model(X_meta, y_meta):
     print(f"  OOF Accuracy: {results[best_model_name]['accuracy']:.6f}")
     print(f"  OOF AUC: {results[best_model_name]['auc']:.6f}")
 
-    # Save ONLY the best model
     print(f"Saving BEST Model to: {META_MODEL_FILE_BEST}")
     joblib.dump(best_model_obj, META_MODEL_FILE_BEST)
     
-    print("="*30)
     print("PHASE 2b Complete: 'BEST' Model saved.")
-    print("="*30)
     
     return best_model_obj
 
@@ -284,7 +270,6 @@ def generate_submission(meta_model, X_test_meta, test_ids, output_filename):
         submission_df.to_csv(output_filename, index=False)
         
         print(f"Submission saved to: {output_filename}")
-        print(submission_df.head())
         return True
         
     except Exception as e:
@@ -300,9 +285,7 @@ def run_blending_ensemble():
     Runs the simple 3-model probability blending.
     Loads CSVs, merges, calculates weighted average, and saves.
     """
-    print("\n" + "="*30)
     print("START PHASE: Simple Blending Ensemble (LGBM+CAT+XGB)")
-    print("="*30)
     
     # Weights for blending
     LGBM_WEIGHT = 1/3
@@ -352,8 +335,6 @@ def run_blending_ensemble():
     except KeyError as e:
         print(f"ERROR: Missing column: {e}")
         print("Ensure the CSVs contain 'battle_id' and the correct probability column.")
-        print(f"LGBM ('{LGBM_PROBA_FILE}') expects 'player_won' (containing probabilities).")
-        print(f"CatBoost/XGBoost expect 'player_won_proba'.")
         return False
     except Exception as e:
         print(f"ERROR during merge: {e}")
@@ -373,7 +354,7 @@ def run_blending_ensemble():
     try:
         final_submission_class_df.to_csv(BLENDED_SUBMISSION_CLASS_OUT, index=False)
         print("\n--- BLENDING (3 MODELS) COMPLETE ---")
-        print(f"Final submission (CLASSES 0/1) saved to: {BLENDED_SUBMISSION_CLASS_OUT}")
+        print(f"Final submission saved to: {BLENDED_SUBMISSION_CLASS_OUT}")
         print(final_submission_class_df.head())
         print(f"Class Distribution: \n{final_submission_class_df['player_won'].value_counts(normalize=True)}")
         return True
