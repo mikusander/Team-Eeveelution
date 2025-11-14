@@ -1,10 +1,10 @@
 """
-Utility library for the XGBoost Pokémon pipeline (v6).
+Utility library for the XGBoost Pokémon pipeline.
 
 This module contains all the necessary functions, constants, and path configurations
 for the entire pipeline:
 - Data Loading
-- All Feature Engineering logic (v6)
+- All Feature Engineering logic
 - Preprocessing (Imputation)
 - Training (K-Fold OOF and final model)
 - Submission creation
@@ -20,7 +20,7 @@ from tqdm import tqdm
 import math
 from collections import Counter
 import warnings
-from pathlib import Path  # Modern path management
+from pathlib import Path 
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_auc_score
 from xgboost import XGBClassifier
@@ -39,14 +39,14 @@ MODEL_OUTPUT_DIR = BASE_DIR / 'XGBoost_Model_Outputs'
 SUBMISSION_DIR = BASE_DIR / 'Submissions'
 OOF_DIR = BASE_DIR / 'OOF_Predictions'
 
-# Input Files (raw)
+# Input Files
 TRAIN_JSON_IN = INPUT_DIR_JSONL / 'train.jsonl'
 TEST_JSON_IN = INPUT_DIR_JSONL / 'test.jsonl'
 
-# Intermediate Files (Phase 1 -> Phase 2)
+# Intermediate Files
 TRAIN_CSV_OUT = DATA_DIR / 'train_features.csv'
 TEST_CSV_OUT = DATA_DIR / 'test_features.csv'
-TEST_IDS_OUT = DATA_DIR / 'test_ids.csv' # IDs for submission
+TEST_IDS_OUT = DATA_DIR / 'test_ids.csv' 
 
 # Output Files (Preprocessing Metadata)
 FEATURES_JSON_OUT = MODEL_OUTPUT_DIR / 'features_final.json'
@@ -60,9 +60,9 @@ SUBMISSION_XGB_PROBA_FILE = SUBMISSION_DIR / 'submission_xgboost_100pct_PROBA.cs
 # --- 3. MODEL AND GAME CONSTANTS ---
 
 SEED = 42
-N_SPLITS = 10 # Number of folds
+N_SPLITS = 10 
 
-# HYPERPARAMETERS (From Optuna in XGBoost_v6 notebook, Trial 84)
+# HYPERPARAMETERS (From Optuna)
 BEST_PARAMS = {
     'objective': 'binary:logistic',
     'tree_method': 'hist',
@@ -80,7 +80,7 @@ BEST_PARAMS = {
     'reg_lambda': 0.25114366021463247
 }
 
-# Type effectiveness constants (V6)
+# Type effectiveness constants
 TYPE_CHART = {
     'normal': {'rock': 0.5, 'ghost': 0},
     'fire': {'fire': 0.5, 'water': 0.5, 'grass': 2, 'ice': 2, 'bug': 2, 'rock': 0.5, 'dragon': 0.5},
@@ -102,7 +102,7 @@ TYPE_CHART = {
 ALL_ATTACK_TYPES = list(TYPE_CHART.keys())
 
 
-# --- 4. HELPER FUNCTIONS (Feature Engineering V6) ---
+# --- 4. HELPER FUNCTIONS (Feature Engineering) ---
 
 def load_jsonl(path):
     """Loads a .jsonl file and returns it as a list of dictionaries."""
@@ -113,7 +113,6 @@ def load_jsonl(path):
                 data.append(json.loads(line))
     except FileNotFoundError:
         print(f"ERROR: File not found: {path}")
-        print("Ensure 'train.jsonl' and 'test.jsonl' are in the 'Input/' directory.")
         return None
     return data
 
@@ -141,7 +140,6 @@ def build_pokedex(data_list: list) -> dict:
                     stats = {k: v for k, v in p.items() if k.startswith('base_')}
                     stats['types'] = p.get('types', ['notype', 'notype'])
                     if stats: pokedex[name] = stats
-        # Aggiungi lead P2 per sicurezza
         if p2 := battle.get('p2_lead_details'):
             if name := p2.get('name'):
                 if name not in pokedex:
@@ -337,7 +335,6 @@ def summary_from_timeline_FULL(timeline: list, p1_team: list) -> dict:
         out[f'tl_p2_inflicted_{s}_count'] = p2_statuses[s]
         out[f'tl_inflicted_{s}_diff'] = p1_statuses[s] - p2_statuses[s]
 
-    # ✅ ERRORE CORRETTO: Usa p1_move_types e p2_move_types
     for mt in ['normal','fire','water','electric','grass','psychic','ice','dragon','rock','ground','flying','ghost','bug','poison','fighting']:
         out[f'tl_p1_move_type_{mt}_count'] = p1_move_types[mt]
         out[f'tl_p2_move_type_{mt}_count'] = p2_move_types[mt]
@@ -439,7 +436,6 @@ def extract_model2_features(battle: dict, pokedex: dict) -> dict:
     out = {}
     timeline = battle.get('battle_timeline', [])
     
-    # 1. Stato Finale
     p1_cond = {p.get('name'): {'hp': 1.0, 'status': 'nostatus', 'effects': []} 
                for p in battle.get('p1_team_details', [])}
     p2_lead = battle.get('p2_lead_details', {}).get('name')
@@ -460,7 +456,6 @@ def extract_model2_features(battle: dict, pokedex: dict) -> dict:
     out['om_p2_mean_pc_hp'] = float(np.mean([v['hp'] for v in p2_cond.values()]) if p2_cond else 0)
 
     out['om_p1_surviving'] = sum(1 for v in p1_cond.values() if v['hp'] > 0)
-    # Per P2 aggiungiamo quelli non visti come vivi
     out['om_p2_surviving'] = sum(1 for v in p2_cond.values() if v['hp'] > 0) + (6 - len(p2_cond))
     
     p1_score = sum(1 for v in p1_cond.values() if v['hp'] > 0 and v['status'] != 'nostatus')
@@ -536,7 +531,6 @@ def prepare_record_features_V12(record: dict, pokedex: dict, max_turns: int = 30
 def create_features_from_raw(data: list) -> pd.DataFrame:
     print("Building Pokedex...")
     POKEDEX = build_pokedex(data)
-    print(f"Pokedex size: {len(POKEDEX)}")
     
     rows = []
     for b in tqdm(data, desc='FE (V12 Maximalist)'):
@@ -567,9 +561,7 @@ def run_01_feature_engineering():
     """
     PHASE 01: Executes the JSONL to CSV conversion with feature engineering (V6).
     """
-    print("\n" + "="*30)
     print("START PHASE 01: Feature Engineering (XGBoost V6)")
-    print("="*30)
     
     np.random.seed(SEED)
     
@@ -580,8 +572,6 @@ def run_01_feature_engineering():
     if train_raw is None or test_raw is None:
         print("ERROR: Raw data not loaded. Aborting.")
         return False
-        
-    print(f'Train records: {len(train_raw)}, Test records: {len(test_raw)}')
     
     print('Creating features for Train set...')
     train_df = create_features_from_raw(train_raw) 
@@ -589,9 +579,6 @@ def run_01_feature_engineering():
     print('Creating features for Test set...')
     test_df = create_features_from_raw(test_raw)
     
-    print(f'Feature shape train/test: {train_df.shape} {test_df.shape}')
-    
-    # Salva i file CSV
     try:
         print(f"Saving to {TRAIN_CSV_OUT}...")
         train_df.to_csv(TRAIN_CSV_OUT, index=False)
@@ -615,9 +602,7 @@ def run_02_train_and_submit():
     """
     PHASE 02: Executes Preprocessing, K-Fold OOF Training, and creates the final submission.
     """
-    print("\n" + "="*30)
     print("START PHASE 02: Preprocessing, Training and Submission (XGBoost V6)")
-    print("="*30)
     
     np.random.seed(SEED)
 
@@ -730,8 +715,8 @@ def run_02_train_and_submit():
         submission_df.to_csv(SUBMISSION_XGB_PROBA_FILE, index=False)
         print(f"Submission (probabilities) saved to: {SUBMISSION_XGB_PROBA_FILE}")
     except Exception as e:
-        print(f"❌ ERROR while saving the submission CSV: {e}")
+        print(f"ERROR while saving the submission CSV: {e}")
         return False
 
-    print(f"\n--- PHASE 02 (XGBoost Train & Submit V6) Complete ---")
+    print(f"\n--- PHASE 02 (XGBoost Train & Submit) Complete ---")
     return True
