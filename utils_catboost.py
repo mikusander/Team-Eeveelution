@@ -32,9 +32,6 @@ import matplotlib.pyplot as plt
 
 # --- 2. GLOBAL CONFIGURATION AND PATHS ---
 
-# --- Execution Flags ---
-RUN_FEATURE_SELECTION = False
-
 # --- Main Folder Structure ---
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -905,15 +902,17 @@ def run_07_preprocessing():
     print("--- Completed 07_preprocessing ---")
     return True
 
-def run_08_feature_selection():
-    """PHASE 3: Runs RFECV (if RUN_FEATURE_SELECTION=True) or loads results (if False)."""
+def run_08_feature_selection(run_rfecv: bool):
+    """
+    PHASE 3: Runs RFECV (if run_rfecv=True) or loads results (if False).
     
-    # Reads the global variable defined in Section 2
-    global RUN_FEATURE_SELECTION 
+    Args:
+        run_rfecv (bool): Flag from main script to enable/disable RFECV execution.
+    """
     
-    if not RUN_FEATURE_SELECTION:
+    if not run_rfecv:
         print("\n--- Starting 08_feature_selection (Mode: Load) ---")
-        print("RUN_FEATURE_SELECTION is False. Skipping RFECV.")
+        print("run_rfecv is False. Skipping RFECV.")
         print("Checking for existence of selected feature files...")
         
         # Check if the files RFECV would have created already exist
@@ -936,13 +935,13 @@ def run_08_feature_selection():
             return True
         else:
             print("\nERROR: To skip RFECV, the '..._selected.csv' and '...names.txt' files must exist.")
-            print(f"Run the pipeline once with RUN_FEATURE_SELECTION=True")
+            print(f"Run the pipeline once with RUN_FEATURE_SELECTION=True in your main script")
             print(f"or place the files manually in {DATA_PIPELINE_DIR} and {MODEL_OUTPUT_DIR}.")
             return False
     
     # --- ELSE: RUN RFECV ---
     print("\n--- Starting 08_feature_selection (Mode: Run RFECV) ---")
-    print("RUN_FEATURE_SELECTION is True. Starting RFECV process...")
+    print("run_rfecv is True. Starting RFECV process...")
     
     try:
         print(f"Loading data from {DATA_PIPELINE_DIR}...")
