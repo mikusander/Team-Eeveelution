@@ -3,7 +3,7 @@ Utility library for the Pokémon CatBoost pipeline.
 
 This module contains all necessary functions for the entire pipeline:
 - Global constants and paths
-- Helper functions for parsing and feature engineering
+- Helper functions for parsing, feature engineering and training
 - Pipeline functions for each phase (00-11)
 
 """
@@ -134,7 +134,7 @@ def get_effectiveness(move_type, target_types):
     """Calculates effectiveness for V3 (dynamic aggregates). Returns NAN for unknowns."""
     move_type_str = str(move_type).lower()
     if move_type_str in ['notype', 'none', 'nan'] or pd.isna(move_type):
-        return np.nan # <-- CRUCIAL CHANGE: from 1.0 to np.nan
+        return np.nan 
     
     effectiveness_map = TYPE_EFFECTIVENESS.get(move_type_str, {})
     
@@ -150,7 +150,7 @@ def get_effectiveness_static(move_type, target_types):
     """Calculates effectiveness for V2 and V6 (static). Returns 1.0 for unknowns."""
     move_type_str = str(move_type).lower()
     if move_type_str in ['notype', 'none', 'nan'] or pd.isna(move_type):
-        return 1.0 # Maintains 1.0 behavior
+        return 1.0 
     
     effectiveness_map = TYPE_EFFECTIVENESS.get(move_type_str, {})
     
@@ -169,7 +169,6 @@ def build_pokedex():
         static_train_df = pd.read_csv(BATTLES_TRAIN_STATIC_CSV)
     except FileNotFoundError:
         print(f"ERROR: '{BATTLES_TRAIN_STATIC_CSV.name}' not found.")
-        print("Ensure you have run PHASE 0 (run_00a_load_data).")
         return None
         
     pokedex = {}
@@ -576,7 +575,7 @@ def run_00b_analyze_moves():
     return final_move_effects
 
 def run_00c_analyze_statuses():
-    """PHASE 0c: Analyzes and returns a set of negative statuses."""
+    """PHASE 0c: Analyses and returns a set of negative statuses."""
     print("\n--- Starting 00c_analyze_statuses ---")
     NEGATIVE_STATUSES = set()
     print(f"Starting status analysis from: {TRAIN_JSONL_FILE}")
@@ -604,7 +603,7 @@ def run_00c_analyze_statuses():
         print(f"Status analysis complete. Found {len(NEGATIVE_STATUSES)} negative statuses.")
         print(f"Statuses found: {NEGATIVE_STATUSES}")
         print("--- Completed 00c_analyze_statuses ---")
-        return list(NEGATIVE_STATUSES) # Return a list
+        return list(NEGATIVE_STATUSES) 
 
     except FileNotFoundError:
         print(f"ERROR: File not found: '{TRAIN_JSONL_FILE}'")
@@ -645,7 +644,6 @@ def run_01_feature_engineering_v1(battles_df, timelines_df):
         on='battle_id', 
         how='left'
     )
-    print(f"Feature v1 DF created with {features_df.shape[1]} columns.")
     print("--- Completed 01_feature_engineering_v1 ---")
     return features_df
 
@@ -722,7 +720,7 @@ def run_04_feature_engineering_v4(features_df_v3, timelines_df, statuses: list):
     print("Starting status feature calculation (v4)...")
     
     NEGATIVE_STATUSES = statuses
-    timeline_df = timelines_df.copy() # Avoids SettingWithCopyWarning
+    timeline_df = timelines_df.copy() 
     timeline_df['p1_has_status_turn'] = timeline_df['p1_pokemon_state.status'].isin(NEGATIVE_STATUSES)
     timeline_df['p2_has_status_turn'] = timeline_df['p2_pokemon_state.status'].isin(NEGATIVE_STATUSES)
 
@@ -851,7 +849,6 @@ def run_07_preprocessing():
 
     y_train = train_df['player_won']
     y_train.to_csv(TARGET_TRAIN_CSV, index=False, header=True)
-    print(f"Saving {TARGET_TRAIN_CSV.name}...")
 
     train_df = train_df.drop(columns=['player_won', 'battle_id']) 
     test_df = test_df.drop(columns=['battle_id', 'player_won'])
@@ -859,7 +856,6 @@ def run_07_preprocessing():
     test_df['is_train'] = 0
 
     combined_df = pd.concat([train_df, test_df], ignore_index=True)
-    print(f"Combined DataFrame created with {combined_df.shape[0]} rows.")
 
     categorical_features = ['p2_lead.name', 'p2_lead.type1', 'p2_lead.type2']
     for i in range(6):
@@ -873,7 +869,7 @@ def run_07_preprocessing():
     print(f"Found {len(numeric_features)} numeric features.")
     print(f"Found {len(categorical_features)} categorical features.")
 
-    print("Executing One-Hot Encoding (pd.get_dummies)...")
+    print("Executing One-Hot Encoding ...")
     processed_df = pd.get_dummies(
         combined_df, 
         columns=categorical_features, 
@@ -915,7 +911,6 @@ def run_08_feature_selection(run_rfecv: bool):
         print("run_rfecv is False. Skipping RFECV.")
         print("Checking for existence of selected feature files...")
         
-        # Check if the files RFECV would have created already exist
         required_files = [
             TRAIN_PROCESSED_SELECTED_CSV,
             TEST_PROCESSED_SELECTED_CSV,
@@ -956,14 +951,11 @@ def run_08_feature_selection(run_rfecv: bool):
         return False
 
     print("Starting RFECV selector training with CatBoost...")
-    print("Estimator: n_estimators=500, depth=7.")
     estimator = CatBoostClassifier(
         n_estimators=500, depth=7, random_seed=42, verbose=0, thread_count=-1
     )
     cv_strategy = KFold(n_splits=5, shuffle=True, random_state=42)
-    print("CV Strategy: 5-Fold KFold.")
 
-    print("Starting RFECV.fit()... This process will be LONG.")
     selector = RFECV(
         estimator, cv=cv_strategy, scoring='roc_auc', step=10, 
         min_features_to_select=50, n_jobs=-1, verbose=2
@@ -1018,10 +1010,9 @@ def run_08_feature_selection(run_rfecv: bool):
     return True
 
 def run_09_data_splitter():
-    """PHASE 4: Splits the selected data into 60/20/20."""
+    """PHASE 4: Splits the selected data."""
     print("\n--- Starting 09_data_splitter ---")
     
-    print("Starting 60/20/20 split script...")
     try:
         X = pd.read_csv(TRAIN_PROCESSED_SELECTED_CSV)
         y = pd.read_csv(TARGET_TRAIN_CSV) 
@@ -1030,7 +1021,6 @@ def run_09_data_splitter():
         return False
 
     print(f"Data loaded: {len(X)} samples.")
-    print("Splitting 60/20/20 (Train/Validation/Holdout)...")
 
     X_temp, X_holdout, y_temp, y_holdout = train_test_split(
         X, y, test_size=0.20, random_state=42, stratify=y
@@ -1038,10 +1028,6 @@ def run_09_data_splitter():
     X_train, X_val, y_train, y_val = train_test_split(
         X_temp, y_temp, test_size=0.25, random_state=84, stratify=y_temp
     )
-
-    print(f"  Training set (60%): {len(X_train)} samples")
-    print(f"  Validation set (20%): {len(X_val)} samples")
-    print(f"  Holdout set (20%): {len(X_holdout)} samples")
 
     print(f"Saving splits to {DATA_PIPELINE_DIR}...")
     X_train.to_csv(X_TRAIN_SPLIT_FILE, index=False)
@@ -1060,7 +1046,7 @@ def run_09_data_splitter():
 
 def run_10_optimize_and_validate(run_grid_search=False, recalculate_iterations=False):
     """
-    PHASE 5: Performs optimization (optional) and validation on the 20% holdout.
+    PHASE 5: Performs optimisation (optional) and validation on the 20% holdout.
     Saves parameters, reports, and plots.
 
     Args:
@@ -1069,9 +1055,7 @@ def run_10_optimize_and_validate(run_grid_search=False, recalculate_iterations=F
         recalculate_iterations (bool): If True, run early stopping to find the best iteration.
                                        If False, load iteration from ITERATION_OUTPUT_FILE.
     """
-    print("\n" + "="*30)
     print("START PHASE 5: Optimization and Validation")
-    print("="*30)
 
     print("Loading 60% Train and 20% Validation data...")
     try:
@@ -1094,7 +1078,6 @@ def run_10_optimize_and_validate(run_grid_search=False, recalculate_iterations=F
     except FileNotFoundError as e:
         print(f"ERROR: Files not found in {DATA_PIPELINE_DIR}.")
         print(e)
-        print("Ensure you have run Phases 0-4 (data pipeline).")
         return False
 
     if run_grid_search:
@@ -1109,7 +1092,6 @@ def run_10_optimize_and_validate(run_grid_search=False, recalculate_iterations=F
         combinations = 1
         for k in param_grid: combinations *= len(param_grid[k])
         print(f"GridSearch parameters to test: {param_grid}")
-        print(f"Total combinations: {combinations}. CV Folds: 5. Total fits: {combinations * 5}")
 
         base_model = CatBoostClassifier(
             objective='Logloss', eval_metric='AUC', verbose=0,
@@ -1172,15 +1154,13 @@ def run_10_optimize_and_validate(run_grid_search=False, recalculate_iterations=F
             'eval_metric': 'Logloss', 'custom_metric': ['AUC'],
             'verbose': 1000, 'random_seed': 42
         })
-        print(f"Training model with n_estimators={loaded_iteration} (fixed)...")
     else:
         final_params_fit.update({
             'n_estimators': 2000,
-            'early_stopping_rounds': 50, # Active
+            'early_stopping_rounds': 50, 
             'eval_metric': 'Logloss', 'custom_metric': ['AUC'],
             'verbose': 1000, 'random_seed': 42
         })
-        print("Training model (max 2000) with Early Stopping (50) to find best iteration...")
     
     final_params_fit.pop('objective', None) 
 
@@ -1221,9 +1201,7 @@ def run_10_optimize_and_validate(run_grid_search=False, recalculate_iterations=F
     else:
         print("\033[92m  OK: No obvious overfitting.\033[0m")
 
-    print("\nClassification Report (on 20% Validation):\n")
     report_text_val = classification_report(y_val, y_pred_val, target_names=['False (0)', 'True (1)'], digits=4)
-    print(report_text_val)
 
     print(f"Saving metrics (Validation) to: {REPORT_TXT_FILE}")
     with open(REPORT_TXT_FILE, 'w') as f:
@@ -1240,7 +1218,6 @@ def run_10_optimize_and_validate(run_grid_search=False, recalculate_iterations=F
     plt.title("Confusion Matrix (20% Validation Set)")
     plt.savefig(CM_OUTPUT_FILE)
     plt.close()
-    print(f"CM plot (Validation) saved to: {CM_OUTPUT_FILE}")
 
     importances = model.get_feature_importance()
     feature_names = X_train.columns
@@ -1254,7 +1231,6 @@ def run_10_optimize_and_validate(run_grid_search=False, recalculate_iterations=F
     plt.tight_layout()
     plt.savefig(IMPORTANCE_OUTPUT_FILE)
     plt.close()
-    print(f"Feature Importance plot saved to: {IMPORTANCE_OUTPUT_FILE}")
 
     results = model.get_evals_result()
     train_set_name = 'validation_0'
@@ -1267,7 +1243,6 @@ def run_10_optimize_and_validate(run_grid_search=False, recalculate_iterations=F
         plt.xlabel('Iterations'); plt.ylabel('Logloss'); plt.legend(); plt.grid(True)
         plt.savefig(LOSS_CURVE_FILE)
         plt.close()
-        print(f"Logloss curve plot saved to: {LOSS_CURVE_FILE}")
     if 'AUC' in results.get(train_set_name, {}):
         plt.figure(figsize=(10, 6))
         plt.plot(results[train_set_name]['AUC'], label='Training AUC (60%)')
@@ -1276,7 +1251,6 @@ def run_10_optimize_and_validate(run_grid_search=False, recalculate_iterations=F
         plt.xlabel('Iterations'); plt.ylabel('AUC'); plt.legend(); plt.grid(True)
         plt.savefig(AUC_CURVE_FILE)
         plt.close()
-        print(f"AUC curve plot saved to: {AUC_CURVE_FILE}")
 
     fpr_val, tpr_val, _ = roc_curve(y_val, y_pred_proba_val)
     plt.figure(figsize=(10, 8))
@@ -1287,24 +1261,17 @@ def run_10_optimize_and_validate(run_grid_search=False, recalculate_iterations=F
     plt.legend(loc="lower right"); plt.grid(True)
     plt.savefig(ROC_CURVE_FILE)
     plt.close()
-    print(f"ROC-AUC plot (Validation) saved to: {ROC_CURVE_FILE}")
     
-    print("\n" + "="*30)
     print("PHASE 5 COMPLETE")
-    print(f"Check results in {MODEL_OUTPUT_DIR}.")
-    print("="*30)
     return True
 
 def run_11_create_submission():
     """
     PHASE 6: Runs OOF, trains on 100%, generates .npy and .csv files.
     """
-    print("\n" + "="*30)
     print("START PHASE 6: OOF Creation and Submission")
-    print("="*30)
     
     N_SPLITS = 10
-    print("Starting OOF (.npy), Test Preds (.npy) and Final Submission...")
 
     print("Loading 100% Training, Test data, and Parameters...")
     try:
@@ -1352,13 +1319,12 @@ def run_11_create_submission():
         oof_preds[val_idx] = model_fold.predict_proba(X_val_fold)[:, 1]
 
     print("OOF prediction generation complete.")
-    print(f"Saving OOF predictions (raw numpy array) to {OOF_FILE_NPY}...")
+    print(f"Saving OOF predictions to {OOF_FILE_NPY}...")
     np.save(OOF_FILE_NPY, oof_preds)
     print(f"OOF file saved to: {OOF_FILE_NPY} (Shape: {oof_preds.shape})")
 
     # --- SECTION 6.2: TRAIN FINAL MODEL ON 100% ---
-    print(f"\n--- Starting Final Model Training (100% Data) ---")
-    print(f"Training final model on 100% of data ({len(X_train_full)} samples)...")
+    print(f"\n--- Starting Final Model Training ---")
 
     final_params = best_params.copy()
     final_params.update({
@@ -1374,11 +1340,10 @@ def run_11_create_submission():
     print("Final training complete.")
 
     # --- SECTION 6.3: GENERATE SUBMISSION ON TEST SET (CSV and NPY) ---
-    print(f"\nGenerating prediction probabilities for the test set ({len(X_test_kaggle)} samples)...")
 
     y_pred_proba = final_model.predict_proba(X_test_kaggle)[:, 1]
 
-    print(f"Saving test set predictions (raw numpy array) to {TEST_PREDS_NPY_FILE}...")
+    print(f"Saving test set predictions to {TEST_PREDS_NPY_FILE}...")
     np.save(TEST_PREDS_NPY_FILE, y_pred_proba)
     print(f"Test set .npy file for stacking saved to: {TEST_PREDS_NPY_FILE}")
 
@@ -1395,7 +1360,7 @@ def run_11_create_submission():
              test_ids = test_ids.values
 
     except Exception as e:
-        print(f"CRITICAL ERROR loading battle_ids from {TEST_FEATURES_FINAL_CSV}: {e}")
+        print(f"ERROR loading battle_ids from {TEST_FEATURES_FINAL_CSV}: {e}")
         return False
 
     if len(test_ids) != len(y_pred_proba):
@@ -1403,7 +1368,7 @@ def run_11_create_submission():
         return False
 
     # Save the final submission .CSV file
-    print(f"Saving submission file (.csv) with predictions to {SUBMISSION_FILE_CSV}...")
+    print(f"Saving submission file with predictions to {SUBMISSION_FILE_CSV}...")
     submission_df = pd.DataFrame({
         'battle_id': test_ids,
         'player_won_proba': y_pred_proba
@@ -1414,9 +1379,5 @@ def run_11_create_submission():
     print(f"File saved to: {SUBMISSION_FILE_CSV}")
     print(submission_df.head())
 
-    print("\n" + "="*30)
     print("PHASE 6 COMPLETE")
-    print(f"Submission in: {SUBMISSION_DIR}")
-    print(f"OOF files in: {OOF_DIR}")
-    print("="*30)
     return True
